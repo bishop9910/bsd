@@ -6,8 +6,6 @@
 
 namespace BSD_CORE {
   extern const std::array<int, 3> version;
-
-  void initDownloadCore();
 }
 
 #endif

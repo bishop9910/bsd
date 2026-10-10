@@ -47,7 +47,7 @@ namespace BSD_CORE {
     shutdown();
   }
 
-  explicit ThreadPool::ThreadPool(const std::size_t thread_num = std::thread::hardware_concurrency())
+  ThreadPool::ThreadPool(const std::size_t thread_num)
     : initialized(false)
   {
     if (thread_num == 0 || thread_num < 0) {

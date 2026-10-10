@@ -13,41 +13,39 @@
 
 namespace BSD_CORE {
   struct Chunk {
-    public:
-      Chunk(size_t id, uint64_t begin, uint64_t end, std::filesystem::path temp_path, bool cache = false) :
-        id(id),
-        begin(begin),
-        end(end),
-        temp_path_(temp_path),
-        cache(cache)
-      {
-        temp_file.open(temp_path);
-      }
-      Chunk(size_t id, bool is_continue){
+    std::uint64_t id    = 0;
+    std::uint64_t begin = 0;   // 绝对偏移，闭区间
+    std::uint64_t end   = 0;   // 绝对偏移，闭区间
+    std::uint64_t done  = 0;   // 已下载字节数（从 begin 起算，不是绝对偏移）
 
-      }
-      uint64_t done  = 0;   // 该片已下多少
-      std::ofstream temp_file; // 分片的temp文件，全部下载好之后拼接
-      std::filesystem::path temp_path_;
-      ~Chunk(){ 
-        temp_file.close();
-        if(cache){
+    std::uint64_t size() const {
+      return end - begin + 1;
+    }
 
-        }
-      }
-    private:
-      size_t id;
-      uint64_t begin = 0;
-      uint64_t end   = 0;   // 闭区间
-      uint64_t need() const { return end - begin; }
-      bool cache = false;
+    std::uint64_t remain() const {
+      return size() - done;
+    }
+
+    bool complete() const {
+      return done >= size();
+    }
+
+    // 下一个要写入的绝对偏移（给 seekp 用）
+    std::uint64_t next_pos() const {
+      return begin + done;
+    }
+
+    // Range 请求的头 "bytes=start-end"，从当前位置开始
+    std::string range_header() const {
+      return "bytes=" + std::to_string(next_pos()) + "-" + std::to_string(end);
+    }
   };
 
   class Downloader {
     public:
-      Downloader(const Options option, std::string url):
+      Downloader(ThreadPool& tp, const Options option, std::string url):
         id(getRandomUuidGen()()),
-        tp(option.threads_num),
+        tp_(tp),
         thread_num(option.threads_num),
         retry(option.retry),
         timeout(option.timeout),
@@ -62,13 +60,14 @@ namespace BSD_CORE {
       }
 
       ~Downloader(){
-        download_info_file.close();
-        tp.shutdown();
+        meta_file.close();
         download_file.close();
       }
+
+      void run();
     private:
       uuids::uuid id;
-      ThreadPool tp;
+      ThreadPool& tp_; 
       size_t thread_num;
       int retry;
       int timeout;
@@ -84,7 +83,7 @@ namespace BSD_CORE {
       std::filesystem::path download_file_path;
 
       bool continue_download = false;
-      std::ofstream download_info_file;
+      std::ofstream meta_file;
 
       std::ofstream download_file;
       

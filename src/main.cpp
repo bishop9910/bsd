@@ -1,30 +1,71 @@
 #include <iostream>
-#include "CLI/CLI.hpp"
+#include "thread_pool.hpp"
 #include "core.hpp"
 #include "utils.hpp"
 #include "option.hpp"
+#include "log.hpp"
+#include "download.hpp"
+
+// 把 vector<string> 拼成 "a, b, c"
+std::string vector_join(const std::vector<std::string>& v, const char* sep = ", ") {
+  std::ostringstream os;
+  for (std::size_t i = 0; i < v.size(); ++i) {
+    if (i) os << sep;
+    os << v[i];
+  }
+  return os.str();
+}
+
+void dump_options(const BSD_CORE::Options& o) {
+  using BSD_CORE::Log;
+
+  Log::debug() << "===== Options =====";
+  Log::debug() << "urls            = [" << vector_join(o.urls) << "]";
+  Log::debug() << "output          = " << (o.output.empty() ? "(auto)" : o.output);
+  Log::debug() << "dir             = " << o.dir;
+  Log::debug() << "threads_num     = " << o.threads_num;
+  Log::debug() << "continue        = " << (o.continue_download ? "true" : "false");
+  Log::debug() << "limit_rate      = " << (o.limit_rate.empty() ? "(none)" : o.limit_rate);
+  Log::debug() << "retry           = " << o.retry;
+  Log::debug() << "timeout         = " << o.timeout << "s";
+  Log::debug() << "proxy           = " << (o.proxy.empty() ? "(none)" : o.proxy);
+  Log::debug() << "headers         = [" << vector_join(o.headers) << "]";
+  Log::debug() << "user_agent      = " << (o.user_agent.empty() ? "(default)" : o.user_agent);
+  Log::debug() << "checksum        = " << (o.checksum.empty() ? "(none)" : o.checksum);
+  Log::debug() << "silent          = " << (o.silent ? "true" : "false");
+  Log::debug() << "log_file        = " << (o.log_file.empty() ? "(console only)" : o.log_file);
+  Log::debug() << "===================";
+}
 
 int main(int argc, char **argv) {
-  CLI::App app{"BSD bishop9910 downloader - a multi-thread downloader"};
 
-  app.set_version_flag("--version", BSD_CORE::versionToString(BSD_CORE::version));
-  Options opts;
+  std::optional<BSD_CORE::Options> parsed;
 
-  app.add_option("url", opts.urls, "Download URL")->required();
+  try{
+    parsed = BSD_CORE::parse_options(argc, argv);
+  }catch(const std::exception& e){
+    std::cerr << e.what() << std::endl;
+  }
 
-  app.add_option("-o,--output", opts.output, "Output file name");
-  app.add_option("-d,--dir", opts.dir, "Download directory")->default_val(".");
-  app.add_option("-t,--threads", opts.threads_num, "Number of concurrent threads of each file")->default_val(16);
-  app.add_flag("-c,--continue", opts.continue_download, "Resume download");
-  app.add_option("--limit-rate", opts.limit_rate, "Rate limit per thread, e.g. 1M");
-  app.add_option("--retry", opts.retry, "Number of retries")->default_val(3);
-  app.add_option("--timeout", opts.timeout, "Timeout in seconds")->default_val(30);
-  app.add_option("--proxy", opts.proxy, "Proxy URL");
-  app.add_option("-H,--header", opts.headers, "Custom header, can be repeated")->take_all();
-  app.add_option("--user-agent", opts.user_agent, "User-Agent");
-  app.add_option("--checksum", opts.checksum, "Checksum, format type:hash");
+  if (!parsed) return 0;
 
-  CLI11_PARSE(app, argc, argv);
+  BSD_CORE::Options opts = std::move(*parsed);
+
+  BSD_CORE::Log::set_silent(opts.silent);
+  if (!opts.log_file.empty()) {
+    BSD_CORE::Log::set_file(opts.log_file);
+  }
+
+  BSD_CORE::Log::set_level(BSD_CORE::LogLevel::Debug);
+
+  dump_options(opts);
+
+  BSD_CORE::ThreadPool tp(opts.threads_num);
+
+  for (auto& url : opts.urls) {
+    BSD_CORE::Downloader dl(tp, opts, url);
+    dl.run();
+  }
 
   return 0;
 }
