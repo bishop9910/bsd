@@ -2,13 +2,14 @@
 #include "file_name.hpp"
 
 namespace BSD_CORE {
+
   constexpr std::uint64_t kDefaultChunkSize = 10 * 1024 * 1024;   // 10MB
   constexpr std::uint64_t kMinChunkSize     = 1 * 1024 * 1024;    // 1MB
   constexpr std::uint64_t kMaxChunkSize     = 64 * 1024 * 1024;   // 64MB
 
   void Downloader::run() {
-    if(std::filesystem::exists(getMetaPath()) && continue_download) {
-      Log::info() << "start to download the file " << file_name << " from " << file_url;
+    Log::info() << "start to download the file " << file_name << " from " << file_url;
+    if(std::filesystem::exists(getMetaPath()) && std::filesystem::exists(getPartPath()) && continue_download) {
       try{
         Log::info() << "try to continue the download...";
         recover();
@@ -42,17 +43,17 @@ namespace BSD_CORE {
 
   void Downloader::prepare() {
     Log::info() << "preparing...";
-    head_ = Curl::head(file_url, curl_config);
+    try{
+      head_ = Curl::head(file_url, curl_config);
 
-    if(file_name.empty()){
-      file_name = resolve_filename(head_);
+      if(file_name.empty()){
+        file_name = resolve_filename(head_);
+      }
+
+      meta_ = buildMeta(head_);
+    }catch(const std::exception& e){
+      throw RetryableError(e.what());
     }
-
-    if(total_bytes == 0) {
-      total_bytes = head_.total_bytes();
-    }
-
-    meta_ = buildMeta(head_);
   }
 
   void Downloader::dispatch() {
@@ -60,11 +61,39 @@ namespace BSD_CORE {
   }
 
   void Downloader::recover() {
+    meta_ = readMetaFile();
+    head_ = Curl::head(file_url, curl_config);
 
+    if(meta_.version != meta_version){
+      throw std::runtime_error("meta file version conflict");
+    }
+
+    if (meta_.url != file_url){
+      throw std::runtime_error("url mismatch, cannot resume");
+    }
+
+    if (meta_.total_bytes != head_.total_bytes()){
+      throw std::runtime_error("file size changed on server");
+    }
+
+    bool etag_cmp = !meta_.etag.empty() && !head_.etag.empty();
+    bool lm_cmp   = !meta_.last_modified.empty() && !head_.last_modified.empty();
+
+    bool etag_ok = etag_cmp && meta_.etag == head_.etag;
+    bool lm_ok   = lm_cmp   && meta_.last_modified == head_.last_modified;
+
+    if (!etag_ok && !lm_ok){
+      throw std::runtime_error("cannot verify server file, cannot resume");
+    }
   }
 
   void Downloader::finalize() {
+    std::filesystem::rename(getPartPath(), getFilePath());
+    std::filesystem::remove(getMetaPath());
+  }
 
+  void Downloader::download_chunk(Chunk& c) {
+    
   }
 
   Meta Downloader::readMetaFile() {
@@ -83,7 +112,7 @@ namespace BSD_CORE {
     std::filesystem::remove(getPartPath());
   }
 
-  void Downloader::updateMetaFile(Meta& m) {
+  void Downloader::updateMetaFile(const Meta& m) {
     Log::info() << "updating the meta file";
 
     auto tmp = getMetaPath();
@@ -108,9 +137,9 @@ namespace BSD_CORE {
     }
   }
 
-  Meta Downloader::buildMeta(const ResponseHead& head) const {
+  Meta Downloader::buildMeta(const ResponseHead& head) {
     Meta m;
-    m.version = 1;
+    m.version = meta_version;
     m.url     = file_url;
 
     m.total_bytes   = head.total_bytes();
@@ -181,18 +210,18 @@ namespace BSD_CORE {
       double dt    = duration<double>(t - last_t).count();
       double speed = dt > 0 ? (now - last) / dt : 0.0;
 
-      double pct = total_bytes > 0
-                ? 100.0 * static_cast<double>(now) / static_cast<double>(total_bytes)
+      double pct = meta_.total_bytes > 0
+                ? 100.0 * static_cast<double>(now) / static_cast<double>(meta_.total_bytes)
                 : 0.0;
 
-      double eta = (speed > 0 && total_bytes > now)
-                ? (total_bytes - now) / speed
+      double eta = (speed > 0 && meta_.total_bytes > now)
+                ? (meta_.total_bytes - now) / speed
                 : 0.0;
 
       std::fprintf(stderr, "\r%5.1f%%  %s / %s  %s/s  ETA %s   ",
                   pct,
                   human_size(static_cast<double>(now)).c_str(),
-                  human_size(static_cast<double>(total_bytes)).c_str(),
+                  human_size(static_cast<double>(meta_.total_bytes)).c_str(),
                   human_size(speed).c_str(),
                   human_time(eta).c_str());
       std::fflush(stderr);

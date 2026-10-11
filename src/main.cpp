@@ -66,13 +66,36 @@ int main(int argc, char **argv) {
   BSD_CORE::ThreadPool tp(opts.threads_num);
 
   for (auto& url : opts.urls) {
-    BSD_CORE::Downloader dl(tp, opts, url);
-    try {
-      dl.run();
-      BSD_CORE::Log::info() << "download finished: " << url;
-    } catch (const std::exception& e) {
-      BSD_CORE::Log::error() << "download failed: " << url << " exception: " << e.what();
+    const int max_attempts = opts.retry;   // retry=3 表示最多试 3 次
+    bool ok = false;
+
+    for (int attempt = 0; attempt < max_attempts; ++attempt) {
+      try {
+        BSD_CORE::Downloader dl(tp, opts, url);
+        dl.run();
+        ok = true;
+        BSD_CORE::Log::info() << "download finished: " << url;
+        break;
+      }
+      catch (const BSD_CORE::RetryableError& e) {
+        BSD_CORE::Log::warn()
+          << "attempt " << (attempt + 1) << "/" << max_attempts
+          << " failed: " << e.what();
+
+        if (attempt + 1 < max_attempts) {
+          auto backoff_ms = (1 << attempt) * 1000 + (std::rand() % 500);
+          std::this_thread::sleep_for(std::chrono::milliseconds(backoff_ms));
+        }
+      }
+      catch (const std::exception& e) {
+        BSD_CORE::Log::error()
+          << "download failed (not retryable): " << url
+          << " : " << e.what();
+        break;
+      }
     }
+
+    if (!ok) BSD_CORE::Log::error() << "download gave up: " << url;
   }
 
   BSD_CORE::Log::info() << "all done";

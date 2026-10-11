@@ -18,19 +18,25 @@
 
 namespace BSD_CORE {
 
+  class RetryableError : public std::runtime_error { 
+    public:
+      RetryableError(const std::string& str):runtime_error(str){};
+      RetryableError(const char* str):runtime_error(str){};
+      bool retryable = true;
+  };
+
   class Downloader {
     public:
-      Downloader(ThreadPool& tp, const Options option, std::string url):
+      Downloader(ThreadPool& tp, const Options& option, std::string url):
         tp_(tp),
         thread_num(option.threads_num),
-        retry(option.retry),
         file_url(url),
         download_file_path(option.dir),
         continue_download(option.continue_download),
         silent(option.silent)
       {
         if(!option.output.empty()){
-          file_name = option.output;
+          file_name = sanitize_filename(option.output);
         }
         curl_config.headers = option.headers;
         curl_config.limit_rate = option.limit_rate_bytes;
@@ -41,13 +47,7 @@ namespace BSD_CORE {
       }
 
       ~Downloader(){
-        if(meta_.version == 1){
-          updateMetaFile(meta_);
-        }
-
-        if(!progress_stop_){
-          stop_progress();
-        }
+        stop_progress();
       };
 
       void run();
@@ -58,10 +58,8 @@ namespace BSD_CORE {
     private:
       ThreadPool& tp_; 
       size_t thread_num;
-      int retry;
       int timeout;
       std::string file_url;
-      uint64_t total_bytes = 0;
       std::atomic<uint64_t> downloaded_bytes{0};
       CurlConfig curl_config;
       Meta meta_;
@@ -73,20 +71,22 @@ namespace BSD_CORE {
       std::filesystem::path download_file_path;
 
       bool continue_download = false;
-      double meta_verison = 1.0;
-
-      std::ofstream download_file;
+      int meta_version = 1;
 
       std::list<std::future<void>> futures_;
       
       std::filesystem::path getMetaPath() const { return download_file_path / (file_name + ".meta"); }
       std::filesystem::path getPartPath() const { return download_file_path / (file_name + ".part"); }
       std::filesystem::path getFilePath() const { return download_file_path / file_name; }
-      uint64_t remaining() const { return total_bytes - downloaded_bytes; }
+      uint64_t remaining() const {
+        auto d = downloaded_bytes.load(std::memory_order_relaxed);
+        return meta_.total_bytes > d ? meta_.total_bytes - d : 0;
+      }
 
-      void updateMetaFile(Meta& m);
+      void updateMetaFile(const Meta& m);
       Meta readMetaFile();
-      Meta buildMeta(const ResponseHead& head) const;
+
+      void download_chunk(Chunk& c);
 
       ResponseHead head_;
 
