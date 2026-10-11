@@ -5,7 +5,7 @@
 namespace BSD_CORE {
 
   Json to_json(const Meta& m) {
-    Json j;
+    Json j = Json::Object{};
     j["version"]       = m.version;
     j["url"]           = m.url;
     j["file_name"]     = m.file_name;
@@ -18,7 +18,7 @@ namespace BSD_CORE {
 
     Json arr = Json::Array{};
     for (const auto& c : m.chunks) {
-      Json jc;
+      Json jc = Json::Object{};
       jc["begin"] = static_cast<int64_t>(c.begin);
       jc["end"]   = static_cast<int64_t>(c.end);
       jc["done"]  = static_cast<int64_t>(c.done);

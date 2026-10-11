@@ -15,6 +15,8 @@
 #include "log.hpp"
 #include "curl.hpp"
 #include "meta.hpp"
+#include "hash.hpp"
+#include "file_name.hpp"
 
 namespace BSD_CORE {
 
@@ -27,7 +29,7 @@ namespace BSD_CORE {
 
   class Downloader {
     public:
-      Downloader(ThreadPool& tp, const Options& option, std::string url):
+      Downloader(ThreadPool& tp, const Options& option, std::string url, std::string hash_check = "NO_HASH_CHECK"):
         tp_(tp),
         thread_num(option.threads_num),
         file_url(url),
@@ -37,6 +39,9 @@ namespace BSD_CORE {
       {
         if(!option.output.empty()){
           file_name = sanitize_filename(option.output);
+        }
+        if(hash_check != "NO_HASH_CHECK"){
+          css = parse_checksum(hash_check);
         }
         curl_config.headers = option.headers;
         curl_config.limit_rate = option.limit_rate_bytes;
@@ -58,7 +63,6 @@ namespace BSD_CORE {
     private:
       ThreadPool& tp_; 
       size_t thread_num;
-      int timeout;
       std::string file_url;
       std::atomic<uint64_t> downloaded_bytes{0};
       CurlConfig curl_config;
@@ -75,8 +79,8 @@ namespace BSD_CORE {
 
       std::list<std::future<void>> futures_;
       
-      std::filesystem::path getMetaPath() const { return download_file_path / (file_name + ".meta"); }
-      std::filesystem::path getPartPath() const { return download_file_path / (file_name + ".part"); }
+      std::filesystem::path getMetaPath() const { return download_file_path / (md5_hex(file_url) + ".meta"); }
+      std::filesystem::path getPartPath() const { return download_file_path / (md5_hex(file_url) + ".part"); }
       std::filesystem::path getFilePath() const { return download_file_path / file_name; }
       uint64_t remaining() const {
         auto d = downloaded_bytes.load(std::memory_order_relaxed);
@@ -99,6 +103,8 @@ namespace BSD_CORE {
       void start_progress();
       void stop_progress();
       void progress_loop();
+
+      ChecksumSpec css;
   };
 
 }

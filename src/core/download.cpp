@@ -1,5 +1,4 @@
 #include "download.hpp"
-#include "file_name.hpp"
 
 namespace BSD_CORE {
 
@@ -8,7 +7,10 @@ namespace BSD_CORE {
   constexpr std::uint64_t kMaxChunkSize     = 64 * 1024 * 1024;   // 64MB
 
   void Downloader::run() {
-    Log::info() << "start to download the file " << file_name << " from " << file_url;
+    Log::info() << "start to download the file${" << file_url << "}";
+    if(!std::filesystem::exists(download_file_path)){
+      std::filesystem::create_directories(download_file_path);
+    }
     if(std::filesystem::exists(getMetaPath()) && std::filesystem::exists(getPartPath()) && continue_download) {
       try{
         Log::info() << "try to continue the download...";
@@ -38,6 +40,22 @@ namespace BSD_CORE {
       throw;
     }
 
+    if(!css.empty()){
+      Log::info() << "checking file hash file${" 
+        << getFilePath() << "}";
+      if(verify_hash(getFilePath(), css)){
+        Log::info() << "hash check passed";
+      }else {
+        Log::error() << "diff hash, origin: ${"
+          << css.hash << "}, current: ${" 
+          << compute_hash(getFilePath(), css.algo) << "}";
+        Log::info() << "hash check failed";
+        std::error_code ec;
+        std::filesystem::remove(getFilePath(), ec);
+        throw std::runtime_error("diff hash, try to redownload the file or check the hash you input");
+      }
+    }
+
     stop_progress();
   }
 
@@ -57,7 +75,38 @@ namespace BSD_CORE {
   }
 
   void Downloader::dispatch() {
+    if (!std::filesystem::exists(getPartPath())) {
+      std::ofstream create(getPartPath(), std::ios::binary | std::ios::trunc);
+      if (!create)
+        throw RetryableError("cannot create part file: " + getPartPath().string());
+    }
+    updateMetaFile(meta_);
 
+    for (auto& c : meta_.chunks) {
+      if (c.complete()) continue;
+
+      futures_.push_back(tp_.submit([this, &c] {
+        download_chunk(c);
+      }));
+    }
+
+    std::exception_ptr first_error;
+    for (auto& f : futures_) {
+      try {
+        f.get();
+      } catch (...) {
+        if (!first_error) first_error = std::current_exception();
+      }
+    }
+    futures_.clear();
+
+    updateMetaFile(meta_);
+
+    if (first_error) std::rethrow_exception(first_error);
+
+    for (auto& c : meta_.chunks) {
+      if (!c.complete()) throw RetryableError("incomplete chunks after dispatch");
+    }
   }
 
   void Downloader::recover() {
@@ -85,15 +134,52 @@ namespace BSD_CORE {
     if (!etag_ok && !lm_ok){
       throw std::runtime_error("cannot verify server file, cannot resume");
     }
+
+    file_name = meta_.file_name;
+
+    std::uint64_t already = 0;
+    for (const auto& c : meta_.chunks) already += c.done;
+    downloaded_bytes.store(already, std::memory_order_relaxed);
   }
 
   void Downloader::finalize() {
-    std::filesystem::rename(getPartPath(), getFilePath());
+    std::error_code ec;
+    std::filesystem::rename(getPartPath(), getFilePath(), ec);
+    if (ec) throw RetryableError("rename failed: " + ec.message());
     std::filesystem::remove(getMetaPath());
   }
 
   void Downloader::download_chunk(Chunk& c) {
-    
+    std::uint64_t start = c.begin + c.done;
+    std::uint64_t end   = c.end;
+    if (start > end) return;
+
+    std::ofstream ofs(getPartPath(), std::ios::binary | std::ios::in | std::ios::out);
+    if (!ofs) throw RetryableError("cannot open part file");
+
+    ofs.seekp(static_cast<std::streamoff>(start));
+    if (!ofs.good()) throw RetryableError("seekp failed");
+
+    std::string if_range = !meta_.etag.empty() ? meta_.etag : meta_.last_modified;
+
+    SinkFn sink = [this, &ofs](const char* data, std::size_t len) -> bool {
+      ofs.write(data, static_cast<std::streamsize>(len));
+      if (!ofs.good()) return false;
+      downloaded_bytes.fetch_add(len, std::memory_order_relaxed);
+      return true;
+    };
+
+    RangeResult r;
+    try {
+      r = Curl::get_range(file_url, curl_config, start, end, if_range, sink);
+    } catch (const std::exception& e) {
+      throw RetryableError(e.what());
+    }
+
+    if (r.status == 200) throw RetryableError("server ignored Range request");
+    if (r.status != 206) throw RetryableError("HTTP " + std::to_string(r.status));
+
+    c.done += r.received;
   }
 
   Meta Downloader::readMetaFile() {

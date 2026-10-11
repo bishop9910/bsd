@@ -32,7 +32,7 @@ void dump_options(const BSD_CORE::Options& o) {
   Log::debug() << "proxy           = " << (o.proxy.empty() ? "(none)" : o.proxy);
   Log::debug() << "headers         = [" << vector_join(o.headers) << "]";
   Log::debug() << "user_agent      = " << (o.user_agent.empty() ? "(default)" : o.user_agent);
-  Log::debug() << "checksum        = " << (o.checksum.empty() ? "(none)" : o.checksum);
+  Log::debug() << "checksums        = " << (o.checksums.empty() ? "(none)" : vector_join(o.checksums));
   Log::debug() << "silent          = " << (o.silent ? "true" : "false");
   Log::debug() << "log_file        = " << (o.log_file.empty() ? "(console only)" : o.log_file);
   Log::debug() << "===================";
@@ -59,19 +59,30 @@ int main(int argc, char **argv) {
     BSD_CORE::Log::set_file(opts.log_file);
   }
 
-  BSD_CORE::Log::set_level(BSD_CORE::LogLevel::Debug);
+  BSD_CORE::Log::set_level(BSD_CORE::LogLevel::Info);
 
   dump_options(opts);
 
   BSD_CORE::ThreadPool tp(opts.threads_num);
 
-  for (auto& url : opts.urls) {
-    const int max_attempts = opts.retry;   // retry=3 表示最多试 3 次
+  if(!opts.checksums.empty() && opts.checksums.size() != opts.urls.size()){
+    BSD_CORE::Log::error() << "num of hash check list is not as same as url list, invaild hash check request";
+    BSD_CORE::Log::warn() << "clear the invaild check list";
+    opts.checksums.clear();
+  }
+
+  for (std::size_t i = 0; i < opts.urls.size(); ++i) {
+    const std::string& url = opts.urls[i];
+
+    std::string checksum = "NO_HASH_CHECK";
+    if (!opts.checksums.empty()) checksum = opts.checksums[i];
+
+    const int max_attempts = opts.retry;
     bool ok = false;
 
     for (int attempt = 0; attempt < max_attempts; ++attempt) {
       try {
-        BSD_CORE::Downloader dl(tp, opts, url);
+        BSD_CORE::Downloader dl(tp, opts, url, checksum);
         dl.run();
         ok = true;
         BSD_CORE::Log::info() << "download finished: " << url;

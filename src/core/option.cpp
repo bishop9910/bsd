@@ -26,7 +26,7 @@ namespace BSD_CORE {
    app.add_option("-o,--output", opts.output, "Output file name");
    app.add_option("-d,--dir",    opts.dir,    "Download directory")
       ->default_val(".");
-   app.add_option("-t,--threads", opts.threads_num, "Number of concurrent threads of each file")
+   app.add_option("-t,--threads", opts.threads_num, "Number of concurrent threads")
       ->default_val(16)
       ->check(CLI::Range(1, 256));
 
@@ -37,14 +37,14 @@ namespace BSD_CORE {
    app.add_option("--retry",   opts.retry,   "Number of retries")
       ->default_val(3);
    app.add_option("--timeout", opts.timeout, "Timeout in seconds")
-      ->default_val(30);
+      ->default_val(90);
 
    // ---- 网络 ----
    app.add_option("--proxy",      opts.proxy,      "Proxy URL");
    app.add_option("-H,--header",  opts.headers,    "Custom header, can be repeated")
       ->take_all();
    app.add_option("--user-agent", opts.user_agent, "User-Agent");
-   app.add_option("--checksum",   opts.checksum,   "Checksum, format type:hash");
+   app.add_option("--checksum",   opts.checksums,   "Checksum, format type:hash");
 
    // ---- 日志 ----
    app.add_flag("-s,--silent",      opts.silent,   "Silent mode, no output");
