@@ -1,4 +1,5 @@
 #include "thread_pool.hpp"
+#include "log.hpp"
 
 namespace BSD_CORE {
 
@@ -38,7 +39,7 @@ namespace BSD_CORE {
       try{
         task(stop_token);
       }catch (const std::exception& e) {
-        std::cerr << "[Error] Task exception: " << e.what() << '\n';
+        Log::error() << "[Error] Task exception: " << e.what();
       }catch(...){}
     }
   }

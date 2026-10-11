@@ -5,6 +5,7 @@
 #include "option.hpp"
 #include "log.hpp"
 #include "download.hpp"
+#include <curl/curl.h>
 
 // 把 vector<string> 拼成 "a, b, c"
 std::string vector_join(const std::vector<std::string>& v, const char* sep = ", ") {
@@ -39,12 +40,14 @@ void dump_options(const BSD_CORE::Options& o) {
 
 int main(int argc, char **argv) {
 
+  curl_global_init(CURL_GLOBAL_DEFAULT);
+
   std::optional<BSD_CORE::Options> parsed;
 
   try{
     parsed = BSD_CORE::parse_options(argc, argv);
   }catch(const std::exception& e){
-    std::cerr << e.what() << std::endl;
+    BSD_CORE::Log::error() << "exception: " << e.what();
   }
 
   if (!parsed) return 0;
@@ -64,8 +67,16 @@ int main(int argc, char **argv) {
 
   for (auto& url : opts.urls) {
     BSD_CORE::Downloader dl(tp, opts, url);
-    dl.run();
+    try {
+      dl.run();
+      BSD_CORE::Log::info() << "download finished: " << url;
+    } catch (const std::exception& e) {
+      BSD_CORE::Log::error() << "download failed: " << url << " exception: " << e.what();
+    }
   }
 
+  BSD_CORE::Log::info() << "all done";
+
+  curl_global_cleanup();
   return 0;
 }

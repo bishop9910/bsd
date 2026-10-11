@@ -1,10 +1,12 @@
+#pragma once
+
 #include <iostream>
 #include <array>
 #include <string>
 #include <map>
 #include <vector>
 #include <random>
-#include <stduuid/uuid.h>
+#include <chrono>
 
 #ifndef BSD_UTILS_
 #define BSD_UTILS_
@@ -26,7 +28,14 @@ namespace BSD_CORE {
 
   std::map<std::string, std::string, CaseInsensitiveLess> rawHeaderToMap(const std::vector<std::string>& raw_headers);
 
-  uuids::uuid_random_generator getRandomUuidGen();
+  std::string human_size(double bytes);
+  std::string human_time(double sec);
+
+  uint64_t parse_size(const std::string& s);
+  std::string url_decode(const std::string& s);
+
+  std::string now_string();
+  std::string http_time_now();
 }
 
 #endif
