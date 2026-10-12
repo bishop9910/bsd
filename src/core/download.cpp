@@ -40,6 +40,8 @@ namespace BSD_CORE {
       throw;
     }
 
+    stop_progress();
+
     if(!css.empty()){
       Log::info() << "checking file hash file${" 
         << getFilePath() << "}";
