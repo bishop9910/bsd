@@ -77,6 +77,10 @@ namespace BSD_CORE {
   }
 
   void Downloader::dispatch() {
+    std::uint64_t already = 0;
+    for (const auto& c : meta_.chunks) already += c.done;
+    downloaded_bytes.store(already, std::memory_order_relaxed);
+    
     if (!std::filesystem::exists(getPartPath())) {
       std::ofstream create(getPartPath(), std::ios::binary | std::ios::trunc);
       if (!create)
@@ -145,10 +149,6 @@ namespace BSD_CORE {
     }
 
     file_name = meta_.file_name;
-
-    std::uint64_t already = 0;
-    for (const auto& c : meta_.chunks) already += c.done;
-    downloaded_bytes.store(already, std::memory_order_relaxed);
   }
 
   void Downloader::finalize() {
