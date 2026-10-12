@@ -2,8 +2,8 @@
 
 namespace BSD_CORE {
 
-  constexpr std::uint64_t kDefaultChunkSize = 10 * 1024 * 1024;   // 10MB
-  constexpr std::uint64_t kMinChunkSize     = 1 * 1024 * 1024;    // 1MB
+  constexpr std::uint64_t kDefaultChunkSize = 16 * 1024 * 1024;   // 10MB
+  constexpr std::uint64_t kMinChunkSize     = 2 * 1024 * 1024;    // 1MB
   constexpr std::uint64_t kMaxChunkSize     = 64 * 1024 * 1024;   // 64MB
 
   void Downloader::run() {
@@ -80,7 +80,11 @@ namespace BSD_CORE {
       if (!create)
         throw RetryableError("cannot create part file: " + getPartPath().string());
     }
-    updateMetaFile(meta_);
+
+    {
+      std::lock_guard<std::mutex> lock(meta_mutex_);
+      updateMetaFile(meta_);
+    }
 
     for (auto& c : meta_.chunks) {
       if (c.complete()) continue;
@@ -100,7 +104,10 @@ namespace BSD_CORE {
     }
     futures_.clear();
 
-    updateMetaFile(meta_);
+    {
+      std::lock_guard<std::mutex> lock(meta_mutex_);
+      updateMetaFile(meta_);
+    }
 
     if (first_error) std::rethrow_exception(first_error);
 
@@ -162,10 +169,23 @@ namespace BSD_CORE {
 
     std::string if_range = !meta_.etag.empty() ? meta_.etag : meta_.last_modified;
 
-    SinkFn sink = [this, &ofs](const char* data, std::size_t len) -> bool {
+    SinkFn sink = [this, &c, &ofs](const char* data, std::size_t len) -> bool {
       ofs.write(data, static_cast<std::streamsize>(len));
       if (!ofs.good()) return false;
+
+      {
+        std::lock_guard<std::mutex> lock(meta_mutex_);
+        c.done += len;
+      }
+
       downloaded_bytes.fetch_add(len, std::memory_order_relaxed);
+
+      auto since = bytes_since_save_.fetch_add(len, std::memory_order_relaxed) + len;
+      if (since >= kMetaSaveInterval) {
+        bytes_since_save_.store(0, std::memory_order_relaxed);
+        std::lock_guard<std::mutex> lock(meta_mutex_);
+        updateMetaFile(meta_);
+      }
       return true;
     };
 
@@ -178,8 +198,6 @@ namespace BSD_CORE {
 
     if (r.status == 200) throw RetryableError("server ignored Range request");
     if (r.status != 206) throw RetryableError("HTTP " + std::to_string(r.status));
-
-    c.done += r.received;
   }
 
   Meta Downloader::readMetaFile() {
@@ -199,7 +217,6 @@ namespace BSD_CORE {
   }
 
   void Downloader::updateMetaFile(const Meta& m) {
-    Log::info() << "updating the meta file";
 
     auto tmp = getMetaPath();
     tmp += ".tmp";

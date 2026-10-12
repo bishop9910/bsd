@@ -2,6 +2,7 @@ add_subdirectory(core)
 
 set(SOURCES 
   main.cpp
+  res/res.rc
 )
 
 add_executable(bsd 

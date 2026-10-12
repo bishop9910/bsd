@@ -69,6 +69,11 @@ namespace BSD_CORE {
       Meta meta_;
       Meta buildMeta(const ResponseHead& head);
 
+      std::mutex meta_mutex_; // 保护 meta_.chunks 和写文件
+      std::atomic<std::uint64_t> bytes_since_save_{0};
+
+      static constexpr std::uint64_t kMetaSaveInterval = 8 * 1024 * 1024;  // 8MB
+
       void createChunks(Meta& m, std::uint64_t total, std::uint64_t chunk_size) const;
 
       std::string file_name;
