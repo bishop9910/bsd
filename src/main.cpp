@@ -32,7 +32,7 @@ void dump_options(const BSD_CORE::Options& o) {
   Log::debug() << "proxy           = " << (o.proxy.empty() ? "(none)" : o.proxy);
   Log::debug() << "headers         = [" << vector_join(o.headers) << "]";
   Log::debug() << "user_agent      = " << (o.user_agent.empty() ? "(default)" : o.user_agent);
-  Log::debug() << "checksums        = " << (o.checksums.empty() ? "(none)" : vector_join(o.checksums));
+  Log::debug() << "checksums        = " << (o.checksums.empty() ? "(none)" : "[" + vector_join(o.checksums) + "]");
   Log::debug() << "silent          = " << (o.silent ? "true" : "false");
   Log::debug() << "log_file        = " << (o.log_file.empty() ? "(console only)" : o.log_file);
   Log::debug() << "===================";
