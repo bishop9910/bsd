@@ -27,7 +27,7 @@ jobs:
       uses: lukka/run-vcpkg@v11
       with:
         vcpkgDirectory: '${{ github.workspace }}/vcpkg'
-    
+
     - name: Setup MSVC
       if: matrix.os == 'windows-latest'
       uses: ilammy/msvc-dev-cmd@v1
@@ -40,3 +40,17 @@ jobs:
 
     - name: Test
       run: ctest --preset ${{ matrix.preset }}
+
+    - name: Upload artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: build-${{ matrix.preset }}
+        path: |
+          build/${{ matrix.preset }}/**
+          !build/${{ matrix.preset }}/CMakeFiles/**
+          !build/${{ matrix.preset }}/**/*.o
+          !build/${{ matrix.preset }}/**/*.obj
+          !build/${{ matrix.preset }}/**/*.a
+          !build/${{ matrix.preset }}/**/*.lib
+          !build/${{ matrix.preset }}/**/vcpkg_installed/**
+        if-no-files-found: warn
