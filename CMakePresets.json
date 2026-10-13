@@ -9,17 +9,17 @@
     {
       "name": "base",
       "hidden": true,
-      "generator": "Visual Studio 18 2026",
-      "binaryDir": "${sourceDir}/build",
+      "binaryDir": "${sourceDir}/build/${presetName}",
       "cacheVariables": {
-        "CMAKE_TOOLCHAIN_FILE": "$env{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake",
-        "CMAKE_BUILD_TYPE": "Release"
+        "CMAKE_TOOLCHAIN_FILE": "$env{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake"
       }
     },
     {
       "name": "gcc",
       "inherits": "base",
+      "generator": "Ninja",
       "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
         "CMAKE_C_COMPILER": "gcc",
         "CMAKE_CXX_COMPILER": "g++"
       }
@@ -27,20 +27,24 @@
     {
       "name": "clang",
       "inherits": "base",
+      "generator": "Ninja",
       "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
         "CMAKE_C_COMPILER": "clang",
         "CMAKE_CXX_COMPILER": "clang++"
       }
     },
     {
       "name": "msvc",
-      "inherits": "base"
+      "inherits": "base",
+      "generator": "Visual Studio 18 2026",
+      "architecture": "x64"
     }
   ],
   "buildPresets": [
     { "name": "gcc",   "configurePreset": "gcc"   },
     { "name": "clang", "configurePreset": "clang" },
-    { "name": "msvc",  "configurePreset": "msvc"  }
+    { "name": "msvc",  "configurePreset": "msvc", "configuration": "Release" }
   ],
   "testPresets": [
     {
@@ -56,6 +60,7 @@
     {
       "name": "msvc",
       "configurePreset": "msvc",
+      "configuration": "Release",
       "output": { "outputOnFailure": true }
     }
   ]
