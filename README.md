@@ -252,7 +252,7 @@ main
 
 ## 许可
 
-MIT[LICENSE]
+[MIT](LICENSE)
 
 ## 致谢
 
