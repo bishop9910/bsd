@@ -12,3 +12,8 @@ add_subdirectory(src)
 if (MSVC)
     set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
 endif()
+
+if(MSVC)
+  target_compile_options(BSD_CORE PRIVATE /utf-8)
+  target_compile_options(bsd PRIVATE /utf-8)
+endif()
