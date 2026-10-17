@@ -11,30 +11,7 @@
 
 namespace BSD_CORE {
   namespace fs = std::filesystem;
-  fs::path GetExePath();
-
-  std::string versionToString(const std::vector<int>& version, const int& build_version, const char* sep){
-    std::ostringstream ver_s;
-    for(int i = 0; i < version.size(); i++){
-      if(i) ver_s << sep;
-      ver_s << version[i];
-    }
-    ver_s << "+" << build_version;
-    if(build_version == 0){
-      ver_s << "(beta)" << "-" << "[SHA256:" << compute_hash(GetExePath(), "sha256") << "]";
-    }
-    return ver_s.str();
-  }
-
-  std::string vector_join(const std::vector<std::string>& v, const char* sep) {
-    std::ostringstream os;
-    for (std::size_t i = 0; i < v.size(); ++i) {
-      if (i) os << sep;
-      os << v[i];
-    }
-    return os.str();
-  }
-
+  
   fs::path GetExePath() {
   #if defined(_WIN32)
     std::vector<wchar_t> buf(MAX_PATH);
@@ -63,6 +40,28 @@ namespace BSD_CORE {
   #else
   #  error "Unsupported platform"
   #endif
+  }
+
+  std::string versionToString(const std::vector<int>& version, const int& build_version, const char* sep){
+    std::ostringstream ver_s;
+    for(int i = 0; i < version.size(); i++){
+      if(i) ver_s << sep;
+      ver_s << version[i];
+    }
+    ver_s << "+" << build_version;
+    if(build_version == 0){
+      ver_s << "(beta)" << "-" << "[SHA256:" << compute_hash(GetExePath(), "sha256") << "]";
+    }
+    return ver_s.str();
+  }
+
+  std::string vector_join(const std::vector<std::string>& v, const char* sep) {
+    std::ostringstream os;
+    for (std::size_t i = 0; i < v.size(); ++i) {
+      if (i) os << sep;
+      os << v[i];
+    }
+    return os.str();
   }
 
   std::string trim(const std::string& s) {

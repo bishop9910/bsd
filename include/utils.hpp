@@ -17,6 +17,7 @@
 namespace BSD_CORE {
   std::string versionToString(const std::vector<int>& version, const int& build_version, const char* sep = ".");
   std::string vector_join(const std::vector<std::string>& v, const char* sep = ", ");
+  std::filesystem::path GetExePath();
 
   struct CaseInsensitiveLess {
     bool operator()(const std::string& a, const std::string& b) const {
