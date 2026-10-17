@@ -9,17 +9,32 @@ namespace BSD_CORE {
     if (auto p = value.find("filename*="); p != std::string::npos) {
       auto v = value.substr(p + 10);
       if (auto q = v.find(';'); q != std::string::npos) v = v.substr(0, q);
-      if (auto sep = v.find("''"); sep != std::string::npos)
-        return url_decode(v.substr(sep + 2));
-      return url_decode(v);
+
+      v = trim(v);
+      if (v.size() >= 2 && v.front() == '"' && v.back() == '"')
+        v = v.substr(1, v.size() - 2);
+
+      auto p1 = v.find('\'');
+      if (p1 != std::string::npos) {
+        auto p2 = v.find('\'', p1 + 1);
+        if (p2 != std::string::npos) {
+          return url_decode(v.substr(p2 + 1), /*plus_as_space=*/false);
+        }
+      }
+
+      return url_decode(v, /*plus_as_space=*/false);
     }
+
     if (auto p = value.find("filename="); p != std::string::npos) {
       auto v = value.substr(p + 9);
       if (auto q = v.find(';'); q != std::string::npos) v = v.substr(0, q);
+
+      v = trim(v);
       if (v.size() >= 2 && v.front() == '"' && v.back() == '"')
         v = v.substr(1, v.size() - 2);
       return v;
     }
+
     return std::nullopt;
   }
 
@@ -29,7 +44,7 @@ namespace BSD_CORE {
     if (auto p = path.find('#'); p != std::string::npos) path = path.substr(0, p);
     auto slash = path.rfind('/');
     std::string name = (slash == std::string::npos) ? path : path.substr(slash + 1);
-    return url_decode(name);
+    return url_decode(name, /*plus_as_space=*/false);
   }
 
   std::string sanitize_filename(std::string name) {

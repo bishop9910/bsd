@@ -1,11 +1,13 @@
 #include <iostream>
+#include <curl/curl.h>
+#include <ctime>
+
 #include "thread_pool.hpp"
 #include "core.hpp"
 #include "utils.hpp"
 #include "option.hpp"
 #include "log.hpp"
 #include "download.hpp"
-#include <curl/curl.h>
 
 void dump_options(const BSD_CORE::Options& o) {
   using BSD_CORE::Log;
@@ -35,6 +37,7 @@ struct CurlGlobal {
 };
 
 int main(int argc, char **argv) {
+  std::srand(static_cast<unsigned>(std::time(nullptr)));
   CurlGlobal curl_guard_;
 
   std::optional<BSD_CORE::Options> parsed;
@@ -95,10 +98,10 @@ int main(int argc, char **argv) {
       }
       catch (const BSD_CORE::RetryableError& e) {
         BSD_CORE::Log::warn()
-          << "attempt " << (attempt + 1) << "/" << max_attempts
+          << "attempt " << (attempt + 1) << "/" << (max_attempts + 1)
           << " failed: " << e.what();
 
-        if (attempt + 1 < max_attempts) {
+        if (attempt + 1 < max_attempts + 1) {
           auto backoff_ms = (1 << attempt) * 1000 + (std::rand() % 500);
           std::this_thread::sleep_for(std::chrono::milliseconds(backoff_ms));
         }

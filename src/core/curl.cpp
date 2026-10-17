@@ -41,6 +41,7 @@ namespace BSD_CORE {
 
   struct WriteContext {
     const SinkFn* sink = nullptr;
+    const ResponseHead* head = nullptr;
     std::uint64_t received = 0;
   };
 
@@ -84,6 +85,11 @@ namespace BSD_CORE {
   std::size_t write_cb(char* ptr, std::size_t size, std::size_t nmemb, void* userdata) {
     auto* ctx = static_cast<WriteContext*>(userdata);
     std::size_t n = size * nmemb;
+
+    if (!ctx->head || ctx->head->status != 206) {
+      return 0;
+    }
+
     if (ctx->sink && !(*ctx->sink)(ptr, n)) return 0;
     ctx->received += n;
     return n;
@@ -171,6 +177,7 @@ namespace BSD_CORE {
     HeaderContext hctx;
     WriteContext  wctx;
     wctx.sink = &sink;
+    wctx.head = &hctx.head;
 
     char errbuf[CURL_ERROR_SIZE] = {0};
 

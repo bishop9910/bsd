@@ -2,6 +2,7 @@
   "dependencies": [
     "cli11",
     "curl",
-    "openssl"
+    "openssl",
+    "fmt"
   ]
 }

@@ -18,6 +18,7 @@ target_include_directories(BSD_CORE PUBLIC ${PROJECT_SOURCE_DIR}/include)
 find_package(CURL CONFIG REQUIRED)
 find_package(CLI11 CONFIG REQUIRED)
 find_package(OpenSSL REQUIRED)
+find_package(fmt CONFIG REQUIRED)
 
 target_link_libraries(BSD_CORE 
   PUBLIC
@@ -25,4 +26,5 @@ target_link_libraries(BSD_CORE
   PRIVATE
     CLI11::CLI11
     OpenSSL::Crypto
+    fmt::fmt
 )

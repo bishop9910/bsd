@@ -98,6 +98,7 @@ namespace BSD_CORE {
     unsigned int  out_len = 0;
 
     EVP_MD_CTX* ctx = EVP_MD_CTX_new();
+    if(ctx == nullptr) throw std::runtime_error("md5 generate exception: ctx cannot be null");
     EVP_DigestInit_ex(ctx, EVP_md5(), nullptr);
     EVP_DigestUpdate(ctx, s.data(), s.size());
     EVP_DigestFinal_ex(ctx, out, &out_len);

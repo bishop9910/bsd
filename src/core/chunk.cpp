@@ -42,7 +42,7 @@ namespace BSD_CORE {
     chunks.reserve(ranges.size());
 
     for(const auto& range : ranges){
-      chunks.push_back({range.offset, range.offset + range.length - 1, 0});
+      chunks.push_back({range.offset, range.offset + range.length - 1, 0, 0});
     }
 
     return chunks;

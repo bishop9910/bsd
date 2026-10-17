@@ -12,6 +12,7 @@ namespace BSD_CORE {
     std::uint64_t begin = 0;
     std::uint64_t end   = 0;
     std::uint64_t done  = 0;
+    std::uint64_t done_saved = 0;
 
     std::uint64_t size() const { return end - begin + 1; }
     std::uint64_t remain() const { return size() - done; }

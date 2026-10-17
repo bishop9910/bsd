@@ -120,7 +120,7 @@ namespace BSD_CORE {
     }
   }
 
-  std::string url_decode(const std::string& s) {
+  std::string url_decode(const std::string& s, bool plus_as_space) {
     std::string out;
     out.reserve(s.size());
 
@@ -141,7 +141,7 @@ namespace BSD_CORE {
           continue;
         }
       }
-      if (s[i] == '+') {
+      if (s[i] == '+' && plus_as_space) {
         out.push_back(' ');
       } else {
         out.push_back(s[i]);

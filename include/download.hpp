@@ -28,9 +28,9 @@ namespace BSD_CORE {
     public:
       using DownloadError::DownloadError;
   };
-  class RetryableChunkError : public DownloadError {
+  class RetryableChunkError : public RetryableError {
     public:
-      using DownloadError::DownloadError;
+      using RetryableError::RetryableError;
   };
 
   class Downloader {
@@ -54,7 +54,8 @@ namespace BSD_CORE {
         curl_config.proxy = option.proxy;
         curl_config.timeout = option.timeout;
         curl_config.user_agent = option.user_agent;
-        // curl_config.verify_ssl = true;
+
+        file_url_md5_hex = md5_hex(file_url);
       }
 
       ~Downloader(){
@@ -69,7 +70,10 @@ namespace BSD_CORE {
     private:
       ThreadPool& tp_; 
       size_t thread_num;
+      
       std::string file_url;
+      std::string file_url_md5_hex;
+
       std::atomic<uint64_t> downloaded_bytes{0};
       CurlConfig curl_config;
       Meta meta_;
@@ -77,8 +81,7 @@ namespace BSD_CORE {
 
       std::mutex meta_mutex_;
       std::atomic<std::uint64_t> bytes_since_save_{0};
-
-      static constexpr std::uint64_t kMetaSaveInterval = 4 * 1024 * 1024;  // 4MB
+      static constexpr size_t kMetaSaveInterval = 4 * 1024 * 1024;
 
       std::string file_name;
       std::filesystem::path download_file_path;
@@ -88,16 +91,12 @@ namespace BSD_CORE {
 
       std::list<std::future<void>> futures_;
       
-      std::filesystem::path getMetaPath() const { return download_file_path / (md5_hex(file_url) + ".meta"); }
-      std::filesystem::path getPartPath() const { return download_file_path / (md5_hex(file_url) + ".part"); }
+      std::filesystem::path getMetaPath() const { return download_file_path / (file_url_md5_hex + ".meta"); }
+      std::filesystem::path getPartPath() const { return download_file_path / (file_url_md5_hex + ".part"); }
       std::filesystem::path getFilePath() const { return download_file_path / PathFromUtf8(file_name); }
-      uint64_t remaining() const {
-        auto d = downloaded_bytes.load(std::memory_order_relaxed);
-        return meta_.total_bytes > d ? meta_.total_bytes - d : 0;
-      }
 
       std::atomic<bool> cancel_{false};
-      
+
       void download_chunk(Chunk& c);
       void download_chunk_with_retry(Chunk& c);
 

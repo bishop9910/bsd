@@ -37,7 +37,7 @@ namespace BSD_CORE {
   std::string human_time(double sec);
 
   uint64_t parse_size(const std::string& s);
-  std::string url_decode(const std::string& s);
+  std::string url_decode(const std::string& s, bool plus_as_space = true);
 
   std::string now_string();
   std::string http_time_now();

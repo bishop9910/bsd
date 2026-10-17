@@ -10,7 +10,7 @@
 namespace BSD_CORE {
 
   struct Meta {
-    int                       version = 1;
+    int                       version = 0;
     std::string               url;
     std::string               file_name;
     std::uint64_t             total_bytes = 0;

@@ -4,6 +4,9 @@ namespace BSD_CORE {
 
   void Downloader::run() {
     Log::info() << "start to download the file${" << file_url << "}";
+    if(file_url.empty()){
+      throw DownloadError("Empty download url");
+    }
     if(!std::filesystem::exists(download_file_path)){
       std::filesystem::create_directories(download_file_path);
     }
@@ -74,6 +77,7 @@ namespace BSD_CORE {
 
   void Downloader::dispatch() {
     cancel_.store(false, std::memory_order_relaxed);
+    bytes_since_save_.store(0, std::memory_order_relaxed);
 
     std::uint64_t already = 0;
     for (const auto& c : meta_.chunks) already += c.done;
@@ -92,9 +96,16 @@ namespace BSD_CORE {
 
     for (auto& c : meta_.chunks) {
       if (c.complete()) continue;
-      futures_.push_back(tp_.submit([this, &chunk = c] {
-        download_chunk_with_retry(chunk);
-      }));
+      try{
+        futures_.push_back(tp_.submit([this, &chunk = c] {
+          download_chunk_with_retry(chunk);
+        }));
+      }catch (const std::exception&) {
+        cancel_.store(true, std::memory_order_relaxed);
+        for (auto& f : futures_) { try { f.get(); } catch (...) {} }
+        futures_.clear();
+        throw;
+      }
     }
 
     std::exception_ptr first_error;
@@ -112,6 +123,9 @@ namespace BSD_CORE {
 
     {
       std::lock_guard<std::mutex> lock(meta_mutex_);
+      for (auto& c : meta_.chunks) {
+        if (c.complete()) c.done_saved = c.size();
+      }
       updateMetaFile(meta_);
     }
 
@@ -134,20 +148,26 @@ namespace BSD_CORE {
       throw std::runtime_error("url mismatch, cannot resume");
     }
 
-    if (meta_.total_bytes != head_.total_bytes()){
+    auto new_size = head_.total_bytes();
+    if (new_size != 0 && new_size != meta_.total_bytes)
       throw std::runtime_error("file size changed on server");
+    if (new_size == 0){
+      Log::warn() << "server did not return Content-Length, skipping size check";
     }
 
     bool etag_cmp = !meta_.etag.empty() && !head_.etag.empty();
     bool lm_cmp   = !meta_.last_modified.empty() && !head_.last_modified.empty();
 
-    bool etag_ok = etag_cmp && meta_.etag == head_.etag;
-    bool lm_ok   = lm_cmp   && meta_.last_modified == head_.last_modified;
+    if (etag_cmp && meta_.etag != head_.etag)
+      throw std::runtime_error("ETag changed on server, cannot resume");
+    if (!etag_cmp && lm_cmp && meta_.last_modified != head_.last_modified)
+      throw std::runtime_error("Last-Modified changed on server, cannot resume");
 
-    if (!etag_ok && !lm_ok){
-      throw std::runtime_error("cannot verify server file, cannot resume");
+    if (!etag_cmp && !lm_cmp) {
+      Log::warn() << "server returned neither ETag nor Last-Modified; " << "resuming with only size+url check, may produce a corrupted file";
     }
 
+    Log::info() << "the download start to continue";
     file_name = meta_.file_name;
   }
 
@@ -198,6 +218,22 @@ namespace BSD_CORE {
           }
           c.done += len;
           downloaded_bytes.fetch_add(len, std::memory_order_relaxed);
+
+          const auto prev = bytes_since_save_.fetch_add(len, std::memory_order_relaxed);
+          if (prev + len >= kMetaSaveInterval) {
+            std::uint64_t expected = prev + len;
+            if (bytes_since_save_.compare_exchange_strong(
+                  expected, 0, std::memory_order_relaxed)) {
+              fs.flush();
+              if (!fs.good()) {
+                sink_error = "flush failed before meta save";
+                return false;
+              }
+              std::lock_guard<std::mutex> lock(meta_mutex_);
+              c.done_saved = c.done;
+              updateMetaFile(meta_);
+            }
+          }
           return true;
         } catch (const std::exception& e) {
           sink_error = e.what();
@@ -210,17 +246,25 @@ namespace BSD_CORE {
 
       RangeResult r = Curl::get_range(file_url, curl_config, start, end, if_range, sink);
 
-      fs.flush();
-      if (!fs.good()) throw RetryableChunkError("flush failed");
-
-      if (!sink_error.empty()) throw RetryableChunkError(sink_error);
-
       if (r.status == 200)
         throw RetryableError("server returned 200 (file changed or Range unsupported)");
       if (r.status == 416)
         throw RetryableError("range not satisfiable, meta stale");
       if (r.status != 206)
         throw RetryableChunkError("HTTP " + std::to_string(r.status));
+
+      auto expect_begin = "bytes " + std::to_string(start) + "-";
+      if (r.content_range.rfind(expect_begin, 0) != 0)
+        throw RetryableChunkError("unexpected Content-Range: " + r.content_range);
+
+      const std::uint64_t expect_size = end - start + 1;
+      if (r.received != expect_size)
+        throw RetryableChunkError("received " + std::to_string(r.received) + " bytes, expected " + std::to_string(expect_size));
+      
+      fs.flush();
+      if (!fs.good()) throw RetryableChunkError("flush failed");
+
+      if (!sink_error.empty()) throw RetryableChunkError(sink_error);
 
     } catch (...) {
       const std::uint64_t written = c.done - original_done;
@@ -248,10 +292,10 @@ namespace BSD_CORE {
             << " attempts: " << e.what();
           throw;
         }
-          Log::warn() << "chunk [" << c.begin << "," << c.end
-            << "] attempt " << attempt << "/" << MaxAttempts
-            << " failed: " << e.what() << ", retrying...";
-          std::this_thread::sleep_for(std::chrono::milliseconds(500 * attempt));
+        Log::warn() << "chunk [" << c.begin << "," << c.end
+          << "] attempt " << attempt << "/" << MaxAttempts
+          << " failed: " << e.what() << ", retrying...";
+        std::this_thread::sleep_for(std::chrono::milliseconds(500 * attempt));
       }
     }
   }
