@@ -92,8 +92,8 @@ namespace BSD_CORE {
 
     for (auto& c : meta_.chunks) {
       if (c.complete()) continue;
-      futures_.push_back(tp_.submit([this, &c] {
-        download_chunk_with_retry(c);
+      futures_.push_back(tp_.submit([this, &chunk = c] {
+        download_chunk_with_retry(chunk);
       }));
     }
 
