@@ -98,6 +98,8 @@ namespace BSD_CORE {
     curl_easy_setopt(h, CURLOPT_NOPROGRESS, 1L);
     curl_easy_setopt(h, CURLOPT_SSL_VERIFYPEER, cfg.verify_ssl ? 1L : 0L);
     curl_easy_setopt(h, CURLOPT_SSL_VERIFYHOST, cfg.verify_ssl ? 2L : 0L);
+    curl_easy_setopt(h, CURLOPT_ACCEPT_ENCODING, "identity");
+    curl_easy_setopt(h, CURLOPT_HTTP_CONTENT_DECODING, 0L);
 
     std::string ua = cfg.user_agent.empty() ? "bsd-downloader/1.0" : cfg.user_agent;
     curl_easy_setopt(h, CURLOPT_USERAGENT, ua.c_str());

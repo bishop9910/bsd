@@ -4,15 +4,18 @@
 namespace BSD_CORE {
 
   void ThreadPool::shutdown(){
-    if(!initialized){
-      return;
+    {
+      std::lock_guard<std::mutex> lock(mutex);
+      if(!initialized){
+        return;
+      }
+      initialized = false;
     }
     for(auto& t : threads_group){
       t.request_stop();
     }
     cv.notify_all();
     threads_group.clear();
-    initialized = false;
   }
 
   void ThreadPool::worker_loop(std::stop_token stop_token){
@@ -26,10 +29,6 @@ namespace BSD_CORE {
 
         if(stop_token.stop_requested() && works.empty()){
           return;
-        }
-
-        if(works.empty()){
-          continue;
         }
 
         task = std::move(works.front());
@@ -51,7 +50,7 @@ namespace BSD_CORE {
   ThreadPool::ThreadPool(const std::size_t thread_num)
     : initialized(false)
   {
-    if (thread_num == 0 || thread_num < 0) {
+    if (thread_num == 0) {
       throw std::invalid_argument("[Error] ThreadPool thread_num must be > 0");
     }
     for (std::size_t i = 0; i < thread_num; ++i) {

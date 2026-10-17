@@ -153,6 +153,7 @@ namespace BSD_CORE {
 
   void Downloader::finalize() {
     std::error_code ec;
+    if(std::filesystem::exists(getFilePath())) throw std::runtime_error("rename failed: file already exists");
     std::filesystem::rename(getPartPath(), getFilePath(), ec);
     if (ec) throw RetryableError("rename failed: " + ec.message());
     std::filesystem::remove(getMetaPath());
