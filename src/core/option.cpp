@@ -23,7 +23,7 @@ namespace BSD_CORE {
       ->expected(-1);   // 收 1 到 N 个
 
    // ---- 基础 ----
-   app.add_option("-o,--output", opts.output, "Output file name");
+   app.add_option("-o,--output", opts.outputs, "Output file name");
    app.add_option("-d,--dir",    opts.dir,    "Download directory")
       ->default_val(".");
    app.add_option("-t,--threads", opts.threads_num, "Number of concurrent threads")

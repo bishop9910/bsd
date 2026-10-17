@@ -22,7 +22,7 @@ void dump_options(const BSD_CORE::Options& o) {
 
   Log::debug() << "===== Options =====";
   Log::debug() << "urls            = [" << vector_join(o.urls) << "]";
-  Log::debug() << "output          = " << (o.output.empty() ? "(auto)" : o.output);
+  Log::debug() << "output          = " << (o.outputs.empty() ? "(auto)" : "[" + vector_join(o.outputs) + "]");
   Log::debug() << "dir             = " << o.dir;
   Log::debug() << "threads_num     = " << o.threads_num;
   Log::debug() << "continue        = " << (o.continue_download ? "true" : "false");
@@ -75,14 +75,16 @@ int main(int argc, char **argv) {
     const std::string& url = opts.urls[i];
 
     std::string checksum = "NO_HASH_CHECK";
+    std::string output = "DEFAULT";
     if (!opts.checksums.empty()) checksum = opts.checksums[i];
+    if (!opts.outputs.empty()) output = opts.outputs[i];
 
     const int max_attempts = opts.retry;
     bool ok = false;
 
     for (int attempt = 0; attempt < max_attempts; ++attempt) {
       try {
-        BSD_CORE::Downloader dl(tp, opts, url, checksum);
+        BSD_CORE::Downloader dl(tp, opts, url, checksum, output);
         dl.run();
         ok = true;
         BSD_CORE::Log::info() << "download finished: " << url;

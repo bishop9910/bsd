@@ -29,7 +29,7 @@ namespace BSD_CORE {
 
   class Downloader {
     public:
-      Downloader(ThreadPool& tp, const Options& option, std::string url, std::string hash_check = "NO_HASH_CHECK"):
+      Downloader(ThreadPool& tp, const Options& option, std::string url, std::string hash_check = "NO_HASH_CHECK", std::string output = "DEFAULT"):
         tp_(tp),
         thread_num(option.threads_num),
         file_url(url),
@@ -37,8 +37,8 @@ namespace BSD_CORE {
         continue_download(option.continue_download),
         silent(option.silent)
       {
-        if(!option.output.empty()){
-          file_name = sanitize_filename(option.output);
+        if(output != "DEFAULT"){
+          file_name = sanitize_filename(output);
         }
         if(hash_check != "NO_HASH_CHECK"){
           css = parse_checksum(hash_check);

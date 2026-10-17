@@ -7,7 +7,7 @@
 namespace BSD_CORE {
   struct Options {
     std::vector<std::string> urls;
-    std::string              output;
+    std::vector<std::string> outputs;
     std::string              dir = ".";
     std::size_t              threads_num = 16;
     bool                     continue_download = false;

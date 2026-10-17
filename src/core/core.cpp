@@ -2,5 +2,5 @@
 #include "thread_pool.hpp"
 
 namespace BSD_CORE {
-  const std::array<int, 3> version = {0, 1, 5};
+  const std::array<int, 3> version = {0, 1, 6};
 }
