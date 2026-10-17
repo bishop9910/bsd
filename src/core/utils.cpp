@@ -1,15 +1,14 @@
 #include "utils.hpp"
 
 namespace BSD_CORE {
-  std::string versionToString(std::array<int, 3> version){
-    std::string ver_s = "";
-    for(int i=0; i<3; i++){
-      ver_s.append(std::to_string(version[i]));
-      if(i != 2){
-        ver_s.append(".");
-      }
+  std::string versionToString(const std::vector<int>& version, const int& build_version, const char* sep){
+    std::ostringstream ver_s;
+    for(int i = 0; i < version.size(); i++){
+      if(i) ver_s << sep;
+      ver_s << version[i];
     }
-    return ver_s;
+    ver_s << "+" << build_version;
+    return ver_s.str();
   }
 
   std::string trim(const std::string& s) {
@@ -133,6 +132,10 @@ namespace BSD_CORE {
 
   std::string http_time_now() {
     return http_time(std::time(nullptr));
+  }
+
+  std::filesystem::path PathFromUtf8(const std::string& s) {
+    return std::filesystem::path(reinterpret_cast<const char8_t*>(s.c_str()));
   }
 
 } // namespace BSD_CORE

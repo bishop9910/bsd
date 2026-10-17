@@ -7,12 +7,13 @@
 #include <vector>
 #include <random>
 #include <chrono>
+#include <filesystem>
 
 #ifndef BSD_UTILS_
 #define BSD_UTILS_
 
 namespace BSD_CORE {
-  std::string versionToString(std::array<int, 3>);
+  std::string versionToString(const std::vector<int>& version, const int& build_version, const char* sep = ".");
 
   struct CaseInsensitiveLess {
     bool operator()(const std::string& a, const std::string& b) const {
@@ -36,6 +37,8 @@ namespace BSD_CORE {
 
   std::string now_string();
   std::string http_time_now();
+
+  std::filesystem::path PathFromUtf8(const std::string& s);
 }
 
 #endif

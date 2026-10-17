@@ -2,8 +2,8 @@
 
 namespace BSD_CORE {
 
-  constexpr std::uint64_t kDefaultChunkSize = 16 * 1024 * 1024;   // 10MB
-  constexpr std::uint64_t kMinChunkSize     = 2 * 1024 * 1024;    // 1MB
+  constexpr std::uint64_t kDefaultChunkSize = 16 * 1024 * 1024;   // 16MB
+  constexpr std::uint64_t kMinChunkSize     = 2 * 1024 * 1024;    // 2MB
   constexpr std::uint64_t kMaxChunkSize     = 64 * 1024 * 1024;   // 64MB
 
   void Downloader::run() {
@@ -208,7 +208,7 @@ namespace BSD_CORE {
       throw std::runtime_error("cannot find meta file");
     }
     std::string json_text((std::istreambuf_iterator<char>(ifs)), std::istreambuf_iterator<char>());
-    Meta meta = from_json(Json::parse(json_text));
+    Meta meta = from_json(BS_JSON::Json::parse(json_text));
     return meta;
   }
 

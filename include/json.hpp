@@ -1,6 +1,7 @@
 // Minimal, dependency-free JSON value + parser + serializer.
-// Enough for the Shinkuro vault backend RPC protocol.
 // UTF-8 is passed through verbatim; \uXXXX escapes are decoded to UTF-8.
+
+// bishop9910 -- 2026/9/27
 #pragma once
 
 #include <cstdint>
@@ -12,7 +13,10 @@
 #include <variant>
 #include <vector>
 
-namespace BSD_CORE {
+#ifndef BS_JSON_
+#define BS_JSON_
+
+namespace BS_JSON {
 
 class Json {
 public:
@@ -396,4 +400,6 @@ private:
   };
 };
 
-}  // namespace bsd_core
+}  // namespace BS_JSON
+
+#endif

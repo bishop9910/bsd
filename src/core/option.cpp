@@ -13,17 +13,17 @@ namespace BSD_CORE {
   std::optional<Options> parse_options(int argc, char** argv) {
    CLI::App app{"BSD bishop9910 downloader - a multi-thread downloader"};
 
-   app.set_version_flag("-v,--version", versionToString(version));
+   app.set_version_flag("-v,--version", versionToString(version, build_version));
 
    Options opts;
 
    // ---- URL参数 ----
-   app.add_option("url", opts.urls, "Download URL(Can be multiple)")
+   app.add_option("url", opts.urls, "Download URL(multiple)")
       ->required()
       ->expected(-1);   // 收 1 到 N 个
 
    // ---- 基础 ----
-   app.add_option("-o,--output", opts.outputs, "Output file name");
+   app.add_option("-o,--output", opts.outputs, "Output file name(multiple)");
    app.add_option("-d,--dir",    opts.dir,    "Download directory")
       ->default_val(".");
    app.add_option("-t,--threads", opts.threads_num, "Number of concurrent threads")
@@ -42,9 +42,9 @@ namespace BSD_CORE {
    // ---- 网络 ----
    app.add_option("--proxy",      opts.proxy,      "Proxy URL");
    app.add_option("-H,--header",  opts.headers,    "Custom header, can be repeated")
-      ->take_all();
+      ->take_all(); // 全要
    app.add_option("--user-agent", opts.user_agent, "User-Agent");
-   app.add_option("--checksum",   opts.checksums,   "Checksum, format type:hash");
+   app.add_option("--checksum",   opts.checksums,   "Checksum, format type:hash(multiple)");
 
    // ---- 日志 ----
    app.add_flag("-s,--silent",      opts.silent,   "Silent mode, no output");

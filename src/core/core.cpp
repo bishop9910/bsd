@@ -1,6 +1,6 @@
 #include "core.hpp"
-#include "thread_pool.hpp"
 
 namespace BSD_CORE {
-  const std::array<int, 3> version = {0, 1, 6};
+  const std::vector<int> version = {0, 1, 7};
+  const int build_version = 2;
 }

@@ -24,9 +24,5 @@ namespace BSD_CORE {
   };
 
 
-  // 返回值：
-  //   解析成功 → std::optional<Options> 有值
-  //   --help / --version 触发退出 → 返回 nullopt，调用方直接 return 0
-  //   解析失败 → 抛 std::runtime_error
   std::optional<Options> parse_options(int argc, char** argv);
 } // namespace BSD_CORE

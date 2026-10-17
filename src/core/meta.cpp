@@ -4,8 +4,8 @@
 
 namespace BSD_CORE {
 
-  Json to_json(const Meta& m) {
-    Json j = Json::Object{};
+  BS_JSON::Json to_json(const Meta& m) {
+    BS_JSON::Json j = BS_JSON::Json::Object{};
     j["version"]       = m.version;
     j["url"]           = m.url;
     j["file_name"]     = m.file_name;
@@ -16,9 +16,9 @@ namespace BSD_CORE {
     j["accept_ranges"] = m.accept_ranges;
     j["created_at"]    = m.created_at;
 
-    Json arr = Json::Array{};
+    BS_JSON::Json arr = BS_JSON::Json::Array{};
     for (const auto& c : m.chunks) {
-      Json jc = Json::Object{};
+      BS_JSON::Json jc = BS_JSON::Json::Object{};
       jc["begin"] = static_cast<int64_t>(c.begin);
       jc["end"]   = static_cast<int64_t>(c.end);
       jc["done"]  = static_cast<int64_t>(c.done);
@@ -29,7 +29,7 @@ namespace BSD_CORE {
     return j;
   }
 
-  Meta from_json(const Json& j) {
+  Meta from_json(const BS_JSON::Json& j) {
     Meta m;
 
     auto get_str = [&](const char* key) -> std::string {

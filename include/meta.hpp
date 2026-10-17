@@ -32,7 +32,7 @@ namespace BSD_CORE {
     std::vector<Chunk>        chunks;
   };
 
-  Json to_json(const Meta& m);
-  Meta from_json(const Json& j);
+  BS_JSON::Json to_json(const Meta& m);
+  Meta from_json(const BS_JSON::Json& j);
 
 } // namespace BSD_CORE

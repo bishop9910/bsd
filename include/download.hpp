@@ -69,10 +69,10 @@ namespace BSD_CORE {
       Meta meta_;
       Meta buildMeta(const ResponseHead& head);
 
-      std::mutex meta_mutex_; // 保护 meta_.chunks 和写文件
+      std::mutex meta_mutex_;
       std::atomic<std::uint64_t> bytes_since_save_{0};
 
-      static constexpr std::uint64_t kMetaSaveInterval = 8 * 1024 * 1024;  // 8MB
+      static constexpr std::uint64_t kMetaSaveInterval = 4 * 1024 * 1024;  // 4MB
 
       void createChunks(Meta& m, std::uint64_t total, std::uint64_t chunk_size) const;
 
@@ -86,7 +86,7 @@ namespace BSD_CORE {
       
       std::filesystem::path getMetaPath() const { return download_file_path / (md5_hex(file_url) + ".meta"); }
       std::filesystem::path getPartPath() const { return download_file_path / (md5_hex(file_url) + ".part"); }
-      std::filesystem::path getFilePath() const { return download_file_path / file_name; }
+      std::filesystem::path getFilePath() const { return download_file_path / PathFromUtf8(file_name); }
       uint64_t remaining() const {
         auto d = downloaded_bytes.load(std::memory_order_relaxed);
         return meta_.total_bytes > d ? meta_.total_bytes - d : 0;
