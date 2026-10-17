@@ -2,10 +2,6 @@
 
 namespace BSD_CORE {
 
-  constexpr std::uint64_t kDefaultChunkSize = 16 * 1024 * 1024;   // 16MB
-  constexpr std::uint64_t kMinChunkSize     = 2 * 1024 * 1024;    // 2MB
-  constexpr std::uint64_t kMaxChunkSize     = 64 * 1024 * 1024;   // 64MB
-
   void Downloader::run() {
     Log::info() << "start to download the file${" << file_url << "}";
     if(!std::filesystem::exists(download_file_path)){
@@ -77,10 +73,12 @@ namespace BSD_CORE {
   }
 
   void Downloader::dispatch() {
+    cancel_.store(false, std::memory_order_relaxed);
+
     std::uint64_t already = 0;
     for (const auto& c : meta_.chunks) already += c.done;
     downloaded_bytes.store(already, std::memory_order_relaxed);
-    
+
     if (!std::filesystem::exists(getPartPath())) {
       std::ofstream create(getPartPath(), std::ios::binary | std::ios::trunc);
       if (!create)
@@ -94,9 +92,8 @@ namespace BSD_CORE {
 
     for (auto& c : meta_.chunks) {
       if (c.complete()) continue;
-
       futures_.push_back(tp_.submit([this, &c] {
-        download_chunk(c);
+        download_chunk_with_retry(c);
       }));
     }
 
@@ -105,7 +102,10 @@ namespace BSD_CORE {
       try {
         f.get();
       } catch (...) {
-        if (!first_error) first_error = std::current_exception();
+        if (!first_error) {
+          first_error = std::current_exception();
+          cancel_.store(true, std::memory_order_relaxed);
+        }
       }
     }
     futures_.clear();
@@ -159,47 +159,100 @@ namespace BSD_CORE {
   }
 
   void Downloader::download_chunk(Chunk& c) {
-    std::uint64_t start = c.begin + c.done;
-    std::uint64_t end   = c.end;
-    if (start > end) return;
+    const std::uint64_t original_done = c.done;
 
-    std::ofstream ofs(getPartPath(), std::ios::binary | std::ios::in | std::ios::out);
-    if (!ofs) throw RetryableError("cannot open part file");
-
-    ofs.seekp(static_cast<std::streamoff>(start));
-    if (!ofs.good()) throw RetryableError("seekp failed");
-
-    std::string if_range = !meta_.etag.empty() ? meta_.etag : meta_.last_modified;
-
-    SinkFn sink = [this, &c, &ofs](const char* data, std::size_t len) -> bool {
-      ofs.write(data, static_cast<std::streamsize>(len));
-      if (!ofs.good()) return false;
-
-      {
-        std::lock_guard<std::mutex> lock(meta_mutex_);
-        c.done += len;
-      }
-
-      downloaded_bytes.fetch_add(len, std::memory_order_relaxed);
-
-      auto since = bytes_since_save_.fetch_add(len, std::memory_order_relaxed) + len;
-      if (since >= kMetaSaveInterval) {
-        bytes_since_save_.store(0, std::memory_order_relaxed);
-        std::lock_guard<std::mutex> lock(meta_mutex_);
-        updateMetaFile(meta_);
-      }
-      return true;
-    };
-
-    RangeResult r;
     try {
-      r = Curl::get_range(file_url, curl_config, start, end, if_range, sink);
-    } catch (const std::exception& e) {
-      throw RetryableError(e.what());
-    }
+      const std::uint64_t start = c.begin + c.done;
+      const std::uint64_t end = c.end;
+      if (start > end) return;
 
-    if (r.status == 200) throw RetryableError("server ignored Range request");
-    if (r.status != 206) throw RetryableError("HTTP " + std::to_string(r.status));
+      const auto part_path = getPartPath();
+
+      std::fstream fs(part_path, std::ios::binary | std::ios::in | std::ios::out);
+      if (!fs) throw RetryableChunkError("cannot open part file");
+      fs.seekp(static_cast<std::streamoff>(start));
+      if (!fs.good()) throw RetryableChunkError("seekp failed");
+
+      std::string if_range;
+      if (!meta_.etag.empty() && meta_.etag.rfind("W/", 0) != 0)
+        if_range = meta_.etag;
+      else if (!meta_.last_modified.empty())
+        if_range = meta_.last_modified;
+
+      std::string sink_error;
+      SinkFn sink = [&](const char* data, std::size_t len) -> bool {
+        if (cancel_.load(std::memory_order_relaxed)) {
+          sink_error = "cancelled";
+          return false;
+        }
+        try {
+          if (len > c.remain()) {
+            sink_error = "server returned more bytes than requested";
+            return false;
+          }
+          fs.write(data, static_cast<std::streamsize>(len));
+          if (!fs.good()) {
+            sink_error = "write failed";
+            return false;
+          }
+          c.done += len;
+          downloaded_bytes.fetch_add(len, std::memory_order_relaxed);
+          return true;
+        } catch (const std::exception& e) {
+          sink_error = e.what();
+          return false;
+        } catch (...) {
+          sink_error = "unknown";
+          return false;
+        }
+      };
+
+      RangeResult r = Curl::get_range(file_url, curl_config, start, end, if_range, sink);
+
+      fs.flush();
+      if (!fs.good()) throw RetryableChunkError("flush failed");
+
+      if (!sink_error.empty()) throw RetryableChunkError(sink_error);
+
+      if (r.status == 200)
+        throw RetryableError("server returned 200 (file changed or Range unsupported)");
+      if (r.status == 416)
+        throw RetryableError("range not satisfiable, meta stale");
+      if (r.status != 206)
+        throw RetryableChunkError("HTTP " + std::to_string(r.status));
+
+    } catch (...) {
+      const std::uint64_t written = c.done - original_done;
+      c.done = original_done;
+      if (written > 0)
+        downloaded_bytes.fetch_sub(written, std::memory_order_relaxed);
+      throw;
+    }
+  }
+
+  void Downloader::download_chunk_with_retry(Chunk& c) {
+    constexpr int MaxAttempts = 3;
+
+    for (int attempt = 1; ; ++attempt) {
+      if (cancel_.load(std::memory_order_relaxed))
+        throw RetryableChunkError("cancelled");
+
+      try {
+        download_chunk(c);
+        return;
+      } catch (const RetryableChunkError& e) {
+        if (attempt >= MaxAttempts) {
+          Log::error() << "chunk [" << c.begin << "," << c.end
+            << "] failed after " << MaxAttempts
+            << " attempts: " << e.what();
+          throw;
+        }
+          Log::warn() << "chunk [" << c.begin << "," << c.end
+            << "] attempt " << attempt << "/" << MaxAttempts
+            << " failed: " << e.what() << ", retrying...";
+          std::this_thread::sleep_for(std::chrono::milliseconds(500 * attempt));
+      }
+    }
   }
 
   Meta Downloader::readMetaFile() {
@@ -229,19 +282,6 @@ namespace BSD_CORE {
     std::filesystem::rename(tmp, getMetaPath());
   }
 
-  void Downloader::createChunks(Meta& m, std::uint64_t total, std::uint64_t chunk_size) const {
-    m.chunks.clear();
-    if (total == 0 || chunk_size == 0) return;
-
-    for (std::uint64_t b = 0; b < total; b += chunk_size) {
-      Chunk c;
-      c.begin = b;
-      c.end   = (b + chunk_size - 1 < total - 1) ? (b + chunk_size - 1) : (total - 1);
-      c.done  = 0;
-      m.chunks.push_back(c);
-    }
-  }
-
   Meta Downloader::buildMeta(const ResponseHead& head) {
     Meta m;
     m.version = meta_version;
@@ -263,27 +303,9 @@ namespace BSD_CORE {
     }
     if (m.file_name.empty())
       m.file_name = "index.html";
+    
 
-    std::uint64_t cs;
-
-    if (!head.supports_range()) {
-      cs = m.total_bytes;
-    } else {
-      cs = kDefaultChunkSize;
-
-      if (m.total_bytes > 10ULL * 1024 * 1024 * 1024)
-        cs = kMaxChunkSize;
-
-      if (m.total_bytes < static_cast<std::uint64_t>(thread_num) * cs)
-        cs = std::max(kMinChunkSize,
-                      m.total_bytes / std::max<std::size_t>(1, thread_num));
-
-      cs = (cs + 4095) & ~4095ULL;
-    }
-
-    m.chunk_size = cs;
-
-    createChunks(m, m.total_bytes, cs);
+    m.chunks = rangesToChunks(planChunks(m.total_bytes, _ideal_chunk, _min_chunk, _max_parts));
 
     return m;
   }

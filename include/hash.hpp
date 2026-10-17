@@ -3,6 +3,8 @@
 #include <filesystem>
 #include <string>
 
+#ifndef BSD_HASH_
+#define BSD_HASH_
 namespace BSD_CORE {
 
   struct ChecksumSpec {
@@ -23,3 +25,4 @@ namespace BSD_CORE {
   std::string md5_hex(const std::string& s);
 
 } // namespace BSD_CORE
+#endif

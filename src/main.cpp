@@ -7,18 +7,9 @@
 #include "download.hpp"
 #include <curl/curl.h>
 
-// 把 vector<string> 拼成 "a, b, c"
-std::string vector_join(const std::vector<std::string>& v, const char* sep = ", ") {
-  std::ostringstream os;
-  for (std::size_t i = 0; i < v.size(); ++i) {
-    if (i) os << sep;
-    os << v[i];
-  }
-  return os.str();
-}
-
 void dump_options(const BSD_CORE::Options& o) {
   using BSD_CORE::Log;
+  using BSD_CORE::vector_join;
 
   Log::debug() << "===== Options =====";
   Log::debug() << "urls            = [" << vector_join(o.urls) << "]";
@@ -38,9 +29,13 @@ void dump_options(const BSD_CORE::Options& o) {
   Log::debug() << "===================";
 }
 
-int main(int argc, char **argv) {
+struct CurlGlobal {
+  CurlGlobal()  { curl_global_init(CURL_GLOBAL_DEFAULT); }
+  ~CurlGlobal() { curl_global_cleanup(); }
+};
 
-  curl_global_init(CURL_GLOBAL_DEFAULT);
+int main(int argc, char **argv) {
+  CurlGlobal curl_guard_;
 
   std::optional<BSD_CORE::Options> parsed;
 
@@ -48,6 +43,7 @@ int main(int argc, char **argv) {
     parsed = BSD_CORE::parse_options(argc, argv);
   }catch(const std::exception& e){
     BSD_CORE::Log::error() << "exception: " << e.what();
+    return 1;
   }
 
   if (!parsed) return 0;
@@ -64,6 +60,7 @@ int main(int argc, char **argv) {
   dump_options(opts);
 
   BSD_CORE::ThreadPool tp(opts.threads_num);
+  std::size_t failed = 0;
 
   if(!opts.checksums.empty() && opts.checksums.size() != opts.urls.size()){
     BSD_CORE::Log::error() << "num of hash check list is not as same as url list, invaild hash check request";
@@ -88,7 +85,7 @@ int main(int argc, char **argv) {
     const int max_attempts = opts.retry;
     bool ok = false;
 
-    for (int attempt = 0; attempt < max_attempts; ++attempt) {
+    for (int attempt = 0; attempt < max_attempts + 1; ++attempt) {
       try {
         BSD_CORE::Downloader dl(tp, opts, url, checksum, output);
         dl.run();
@@ -114,11 +111,10 @@ int main(int argc, char **argv) {
       }
     }
 
-    if (!ok) BSD_CORE::Log::error() << "download gave up: " << url;
+    if(!ok) { ++failed; BSD_CORE::Log::error() << "download gave up: " << url; }
+
   }
 
   BSD_CORE::Log::info() << "all done";
-
-  curl_global_cleanup();
-  return 0;
+  return failed == 0 ? 0 : 1;
 }

@@ -9,11 +9,14 @@
 #include <chrono>
 #include <filesystem>
 
+#include "hash.hpp"
+
 #ifndef BSD_UTILS_
 #define BSD_UTILS_
 
 namespace BSD_CORE {
   std::string versionToString(const std::vector<int>& version, const int& build_version, const char* sep = ".");
+  std::string vector_join(const std::vector<std::string>& v, const char* sep = ", ");
 
   struct CaseInsensitiveLess {
     bool operator()(const std::string& a, const std::string& b) const {

@@ -1,6 +1,18 @@
 #include "utils.hpp"
 
+#if defined(_WIN32)
+#  include <windows.h>
+#elif defined(__linux__)
+#  include <unistd.h>
+#  include <limits.h>
+#elif defined(__APPLE__)
+#  include <mach-o/dyld.h>
+#endif
+
 namespace BSD_CORE {
+  namespace fs = std::filesystem;
+  fs::path GetExePath();
+
   std::string versionToString(const std::vector<int>& version, const int& build_version, const char* sep){
     std::ostringstream ver_s;
     for(int i = 0; i < version.size(); i++){
@@ -8,7 +20,49 @@ namespace BSD_CORE {
       ver_s << version[i];
     }
     ver_s << "+" << build_version;
+    if(build_version == 0){
+      ver_s << "(beta)" << "-" << "[SHA256:" << compute_hash(GetExePath(), "sha256") << "]";
+    }
     return ver_s.str();
+  }
+
+  std::string vector_join(const std::vector<std::string>& v, const char* sep) {
+    std::ostringstream os;
+    for (std::size_t i = 0; i < v.size(); ++i) {
+      if (i) os << sep;
+      os << v[i];
+    }
+    return os.str();
+  }
+
+  fs::path GetExePath() {
+  #if defined(_WIN32)
+    std::vector<wchar_t> buf(MAX_PATH);
+    while (true) {
+      DWORD len = ::GetModuleFileNameW(nullptr, buf.data(), static_cast<DWORD>(buf.size()));
+      if (len == 0) throw std::runtime_error("GetModuleFileNameW failed");
+      if (len < buf.size()) return fs::path(std::wstring(buf.data(), len));
+      buf.resize(buf.size() * 2);
+    }
+  #elif defined(__linux__)
+    std::vector<char> buf(PATH_MAX);
+    while (true) {
+      ssize_t len = ::readlink("/proc/self/exe", buf.data(), buf.size());
+      if (len < 0) throw std::runtime_error("readlink failed");
+      if (static_cast<size_t>(len) < buf.size())
+        return fs::path(std::string(buf.data(), len));
+      buf.resize(buf.size() * 2);
+    }
+  #elif defined(__APPLE__)
+    uint32_t size = 0;
+    ::_NSGetExecutablePath(nullptr, &size);  // 先问需要多大
+    std::vector<char> buf(size);
+    if (::_NSGetExecutablePath(buf.data(), &size) != 0)
+      throw std::runtime_error("_NSGetExecutablePath failed");
+    return fs::canonical(buf.data());  // 解析符号链接/相对路径
+  #else
+  #  error "Unsupported platform"
+  #endif
   }
 
   std::string trim(const std::string& s) {

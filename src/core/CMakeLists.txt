@@ -8,6 +8,7 @@ set(SOURCES
   curl.cpp
   meta.cpp
   hash.cpp
+  chunk.cpp
 )
 
 add_library(BSD_CORE STATIC ${SOURCES})

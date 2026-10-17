@@ -20,11 +20,17 @@
 
 namespace BSD_CORE {
 
-  class RetryableError : public std::runtime_error { 
+  class DownloadError : public std::runtime_error {
     public:
-      RetryableError(const std::string& str):runtime_error(str){};
-      RetryableError(const char* str):runtime_error(str){};
-      bool retryable = true;
+      using std::runtime_error::runtime_error;
+  };
+  class RetryableError : public DownloadError {
+    public:
+      using DownloadError::DownloadError;
+  };
+  class RetryableChunkError : public DownloadError {
+    public:
+      using DownloadError::DownloadError;
   };
 
   class Downloader {
@@ -74,13 +80,11 @@ namespace BSD_CORE {
 
       static constexpr std::uint64_t kMetaSaveInterval = 4 * 1024 * 1024;  // 4MB
 
-      void createChunks(Meta& m, std::uint64_t total, std::uint64_t chunk_size) const;
-
       std::string file_name;
       std::filesystem::path download_file_path;
 
       bool continue_download = false;
-      int meta_version = 1;
+      int meta_version = 2;
 
       std::list<std::future<void>> futures_;
       
@@ -92,10 +96,13 @@ namespace BSD_CORE {
         return meta_.total_bytes > d ? meta_.total_bytes - d : 0;
       }
 
+      std::atomic<bool> cancel_{false};
+      
+      void download_chunk(Chunk& c);
+      void download_chunk_with_retry(Chunk& c);
+
       void updateMetaFile(const Meta& m);
       Meta readMetaFile();
-
-      void download_chunk(Chunk& c);
 
       ResponseHead head_;
 

@@ -10,7 +10,6 @@ namespace BSD_CORE {
     j["url"]           = m.url;
     j["file_name"]     = m.file_name;
     j["total_bytes"]   = static_cast<int64_t>(m.total_bytes);
-    j["chunk_size"]    = static_cast<int64_t>(m.chunk_size);
     j["etag"]          = m.etag;
     j["last_modified"] = m.last_modified;
     j["accept_ranges"] = m.accept_ranges;
@@ -43,7 +42,6 @@ namespace BSD_CORE {
     m.url           = get_str("url");
     m.file_name     = get_str("file_name");
     m.total_bytes   = get_u64("total_bytes");
-    m.chunk_size    = get_u64("chunk_size");
     m.etag          = get_str("etag");
     m.last_modified = get_str("last_modified");
     m.accept_ranges = get_str("accept_ranges");
