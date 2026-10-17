@@ -13,7 +13,7 @@ namespace BSD_CORE {
   std::optional<Options> parse_options(int argc, char** argv) {
    CLI::App app{"BSD bishop9910 downloader - a multi-thread downloader"};
 
-   app.set_version_flag("-v,--version", versionToString(version, build_version));
+   app.set_version_flag("-v,--version", versionToString(version, build_version, is_beta));
 
    Options opts;
 

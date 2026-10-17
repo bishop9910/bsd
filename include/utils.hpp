@@ -15,7 +15,7 @@
 #define BSD_UTILS_
 
 namespace BSD_CORE {
-  std::string versionToString(const std::vector<int>& version, const int& build_version, const char* sep = ".");
+  std::string versionToString(const std::vector<int>& version, const int& build_version, const bool is_beta = false, const char* sep = ".");
   std::string vector_join(const std::vector<std::string>& v, const char* sep = ", ");
   std::filesystem::path GetExePath();
 

@@ -42,14 +42,14 @@ namespace BSD_CORE {
   #endif
   }
 
-  std::string versionToString(const std::vector<int>& version, const int& build_version, const char* sep){
+  std::string versionToString(const std::vector<int>& version, const int& build_version, const bool is_beta, const char* sep){
     std::ostringstream ver_s;
     for(int i = 0; i < version.size(); i++){
       if(i) ver_s << sep;
       ver_s << version[i];
     }
     ver_s << "+" << build_version;
-    if(build_version == 0){
+    if(is_beta){
       ver_s << "(beta)" << "-" << "[SHA256:" << compute_hash(GetExePath(), "sha256") << "]";
     }
     return ver_s.str();

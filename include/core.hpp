@@ -7,6 +7,7 @@
 namespace BSD_CORE {
   extern const std::vector<int> version;
   extern const int build_version;
+  extern const bool is_beta;
 }
 
 #endif
