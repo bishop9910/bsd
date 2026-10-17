@@ -71,6 +71,12 @@ int main(int argc, char **argv) {
     opts.checksums.clear();
   }
 
+  if(!opts.outputs.empty() && opts.outputs.size() != opts.urls.size()){
+    BSD_CORE::Log::error() << "num of hash output list is not as same as url list, invaild output request";
+    BSD_CORE::Log::warn() << "clear the invaild output list";
+    opts.outputs.clear();
+  }
+
   for (std::size_t i = 0; i < opts.urls.size(); ++i) {
     const std::string& url = opts.urls[i];
 
