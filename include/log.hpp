@@ -32,12 +32,21 @@ enum class LogLevel : int {
   Off
 };
 
+// level is the numeric LogLevel value.
+using LogSink = void (*)(int level, const char* message, void* user);
+
 class Log {
 public:
   static void set_silent(bool s)          { silent() = s; }
   static void set_console(bool on)        { console() = on; }
   static void set_level(LogLevel lv)      { min_level() = lv; }
   static void set_color(bool on)          { color() = on; }
+
+  static void set_callback(LogSink cb, void* user) {
+    std::lock_guard<std::mutex> lock(mutex());
+    callback()      = cb;
+    callback_user() = user;
+  }
 
   static void set_file(const std::string& path) {
     std::lock_guard<std::mutex> lock(mutex());
@@ -73,12 +82,14 @@ public:
   static Line error() { return Line(LogLevel::Error); }
 
 private:
-  static std::mutex&      mutex()     { static std::mutex m;      return m; }
-  static std::ofstream&   file()      { static std::ofstream f;   return f; }
-  static bool&            silent()    { static bool s = false;     return s; }
-  static bool&            console()   { static bool c = true;      return c; }
-  static bool&            color()     { static bool c = true;      return c; }
-  static LogLevel&        min_level() { static LogLevel l = LogLevel::Info; return l; }
+  static std::mutex&      mutex()         { static std::mutex m;         return m; }
+  static std::ofstream&   file()          { static std::ofstream f;      return f; }
+  static bool&            silent()        { static bool s = false;        return s; }
+  static bool&            console()       { static bool c = true;         return c; }
+  static bool&            color()         { static bool c = true;         return c; }
+  static LogLevel&        min_level()     { static LogLevel l = LogLevel::Info; return l; }
+  static LogSink&         callback()      { static LogSink cb = nullptr;   return cb; }
+  static void*&           callback_user() { static void* u  = nullptr;    return u; }
 
   static const char* level_str(LogLevel lv) {
     switch (lv) {
@@ -149,21 +160,31 @@ private:
                                  tm_buf.tm_min, tm_buf.tm_sec,
                                  static_cast<int>(ms.count()));
 
-    std::lock_guard<std::mutex> lock(mutex());
+    LogSink cb     = nullptr;
+    void*   cb_user = nullptr;
+    {
+      std::lock_guard<std::mutex> lock(mutex());
 
-    if (console()) {
-      if (color_enabled()) {
-        fmt::print(style_of(level), "[{}] [{}] {}\n",
-                   ts, level_str(level), msg);
-      } else {
-        fmt::print("[{}] [{}] {}\n", ts, level_str(level), msg);
+      if (console()) {
+        if (color_enabled()) {
+          fmt::print(style_of(level), "[{}] [{}] {}\n",
+                     ts, level_str(level), msg);
+        } else {
+          fmt::print("[{}] [{}] {}\n", ts, level_str(level), msg);
+        }
       }
+
+      if (file().is_open()) {
+        file() << '[' << ts << "] [" << level_str(level) << "] " << msg << '\n';
+        file().flush();
+      }
+
+      cb      = callback();
+      cb_user = callback_user();
     }
 
-    if (file().is_open()) {
-      file() << '[' << ts << "] [" << level_str(level) << "] " << msg << '\n';
-      file().flush();
-    }
+    // Called outside the lock so a client callback may log again.
+    if (cb) cb(static_cast<int>(level), msg.c_str(), cb_user);
   }
 };
 

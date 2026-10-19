@@ -27,7 +27,7 @@ namespace BSD_CORE {
       prepare();
     }
 
-    if(!silent) {
+    if(progress_cb_) {
       start_progress();
     }
 
@@ -58,6 +58,7 @@ namespace BSD_CORE {
     }
 
     stop_progress();
+    report_progress(true);
   }
 
   void Downloader::prepare() {
@@ -76,7 +77,6 @@ namespace BSD_CORE {
   }
 
   void Downloader::dispatch() {
-    cancel_.store(false, std::memory_order_relaxed);
     bytes_since_save_.store(0, std::memory_order_relaxed);
 
     std::uint64_t already = 0;
@@ -202,13 +202,21 @@ namespace BSD_CORE {
 
       std::string sink_error;
       SinkFn sink = [&](const char* data, std::size_t len) -> bool {
-        if (cancel_.load(std::memory_order_relaxed)) {
+        if (cancelled()) {
           sink_error = "cancelled";
           return false;
         }
         try {
           if (len > c.remain()) {
             sink_error = "server returned more bytes than requested";
+            return false;
+          }
+          if (limiter_ && !limiter_->acquire(len, cancel_)) {
+            sink_error = "cancelled";
+            return false;
+          }
+          if (cancelled()) {
+            sink_error = "cancelled";
             return false;
           }
           fs.write(data, static_cast<std::streamsize>(len));
@@ -279,7 +287,7 @@ namespace BSD_CORE {
     constexpr int MaxAttempts = 3;
 
     for (int attempt = 1; ; ++attempt) {
-      if (cancel_.load(std::memory_order_relaxed))
+      if (cancelled())
         throw RetryableChunkError("cancelled");
 
       try {
@@ -350,7 +358,7 @@ namespace BSD_CORE {
       m.file_name = "index.html";
     
 
-    m.chunks = rangesToChunks(planChunks(m.total_bytes, _ideal_chunk, _min_chunk, _max_parts));
+    m.chunks = rangesToChunks(planChunksAdaptive(m.total_bytes, thread_num));
 
     return m;
   }
@@ -382,27 +390,25 @@ namespace BSD_CORE {
       double dt    = duration<double>(t - last_t).count();
       double speed = dt > 0 ? (now - last) / dt : 0.0;
 
-      double pct = meta_.total_bytes > 0
-                ? 100.0 * static_cast<double>(now) / static_cast<double>(meta_.total_bytes)
-                : 0.0;
-
-      double eta = (speed > 0 && meta_.total_bytes > now)
-                ? (meta_.total_bytes - now) / speed
-                : 0.0;
-
-      std::fprintf(stderr, "\r%5.1f%%  %s / %s  %s/s  ETA %s   ",
-                  pct,
-                  human_size(static_cast<double>(now)).c_str(),
-                  human_size(static_cast<double>(meta_.total_bytes)).c_str(),
-                  human_size(speed).c_str(),
-                  human_time(eta).c_str());
-      std::fflush(stderr);
+      if (progress_cb_) {
+        try {
+          progress_cb_(now, meta_.total_bytes, speed, false);
+        } catch (...) {
+          // A misbehaving client callback must not kill the progress thread.
+        }
+      }
 
       last   = now;
       last_t = t;
     }
+  }
 
-    std::fprintf(stderr, "\n");
+  void Downloader::report_progress(bool finished) {
+    if (!progress_cb_) return;
+    try {
+      progress_cb_(downloaded_bytes.load(std::memory_order_relaxed),
+                   meta_.total_bytes, 0.0, finished);
+    } catch (...) {}
   }
 
 

@@ -27,6 +27,12 @@ namespace BSD_CORE {
   extern const uint64_t _max_parts;
 
   std::vector<Range> planChunks(std::uint64_t total, std::uint64_t ideal_chunk, std::uint64_t min_chunk, std::uint64_t max_parts = 4096);
+
+  // Thread aware plan: keeps the work queue loaded with several slices per
+  // worker so threads do not idle at the tail, while still bounding the
+  // number of slices (and therefore the .meta file) by _max_parts.
+  std::vector<Range> planChunksAdaptive(std::uint64_t total, std::size_t threads);
+
   std::vector<Chunk> rangesToChunks(const std::vector<Range>& ranges);
 }
 #endif

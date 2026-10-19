@@ -1,19 +1,43 @@
 #include <optional>
 #include <stdexcept>
 #include <string>
+#include <cstdint>
 
 #include <CLI/CLI.hpp>
-#include "core.hpp"   // version
-#include "log.hpp"
-#include "utils.hpp"  // versionToString
+#include "bsd/bsd_core.h"
 #include "option.hpp"
+
+namespace {
+
+  // Small, dependency free copy of the size parser: the CLI no longer links
+  // the C++ internals of the core, only the exported C API.
+  std::uint64_t parse_size(const std::string& s) {
+    if (s.empty()) return 0;
+    std::uint64_t mul = 1;
+    std::string num = s;
+    char suffix = s.back();
+    if (suffix == 'K' || suffix == 'k') { mul = 1024ULL;                 num.pop_back(); }
+    else if (suffix == 'M' || suffix == 'm') { mul = 1024ULL * 1024;     num.pop_back(); }
+    else if (suffix == 'G' || suffix == 'g') { mul = 1024ULL * 1024 * 1024; num.pop_back(); }
+
+    try {
+      std::size_t pos = 0;
+      std::uint64_t v = std::stoull(num, &pos);
+      if (pos != num.size()) throw std::invalid_argument("trailing");
+      return v * mul;
+    } catch (...) {
+      throw std::runtime_error("invalid size: " + s);
+    }
+  }
+
+} // namespace
 
 namespace BSD_CORE {
 
   std::optional<Options> parse_options(int argc, char** argv) {
    CLI::App app{"BSD bishop9910 downloader - a multi-thread downloader"};
 
-   app.set_version_flag("-v,--version", versionToString(version, build_version, is_beta));
+   app.set_version_flag("-v,--version", bsd_version());
 
    Options opts;
 
@@ -32,7 +56,7 @@ namespace BSD_CORE {
 
    // ---- 行为 ----
    app.add_flag("-c,--continue", opts.continue_download, "Resume download");
-   app.add_option("--limit-rate", opts.limit_rate, "Rate limit per thread, e.g. 1M")
+   app.add_option("--limit-rate", opts.limit_rate, "Total rate limit for all threads, e.g. 1M")
       ->default_val("1G");
    app.add_option("--retry",   opts.retry,   "Number of retries")
       ->default_val(3);
@@ -57,7 +81,8 @@ namespace BSD_CORE {
       app.exit(e);
       return std::nullopt;
    }catch(const std::exception& e){
-      Log::error() << "exception: " << e.what();
+      const std::string message = std::string("exception: ") + e.what();
+      bsd_log_message(BSD_LOG_ERROR, message.c_str());
       return std::nullopt;
    }
 

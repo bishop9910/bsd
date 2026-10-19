@@ -3,6 +3,8 @@
 #include <string>
 #include <vector>
 #include <cstddef>
+#include <cstdint>
+#include <optional>
 
 namespace BSD_CORE {
   struct Options {
