@@ -220,7 +220,7 @@ int bsd_download(bsd_handle*        handle,
     try {
       downloader.run();
     } catch (...) {
-      was_cancelled = downloader.cancelled();
+      was_cancelled = downloader.cancelled() && !downloader.aborted();
       throw;
     }
 

@@ -101,7 +101,7 @@ namespace BSD_CORE {
           download_chunk_with_retry(chunk);
         }));
       }catch (const std::exception&) {
-        cancel_.store(true, std::memory_order_relaxed);
+        abort_workers();
         for (auto& f : futures_) { try { f.get(); } catch (...) {} }
         futures_.clear();
         throw;
@@ -115,7 +115,7 @@ namespace BSD_CORE {
       } catch (...) {
         if (!first_error) {
           first_error = std::current_exception();
-          cancel_.store(true, std::memory_order_relaxed);
+          abort_workers();
         }
       }
     }

@@ -85,6 +85,14 @@ namespace BSD_CORE {
       }
       void set_external_cancel(const std::atomic<bool>* flag) { external_cancel_ = flag; }
 
+      // Abort requested by the downloader itself (a chunk failed): the other
+      // workers have to stop, but this must not be reported as a user cancel.
+      void abort_workers() {
+        aborted_.store(true, std::memory_order_relaxed);
+        cancel_.store(true, std::memory_order_relaxed);
+      }
+      bool aborted() const { return aborted_.load(std::memory_order_relaxed); }
+
       void run();
       void prepare();
       void dispatch();
@@ -119,6 +127,7 @@ namespace BSD_CORE {
       std::filesystem::path getFilePath() const { return download_file_path / PathFromUtf8(file_name); }
 
       std::atomic<bool> cancel_{false};
+      std::atomic<bool> aborted_{false};
 
       void download_chunk(Chunk& c);
       void download_chunk_with_retry(Chunk& c);
