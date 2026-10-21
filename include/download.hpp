@@ -35,6 +35,12 @@ namespace BSD_CORE {
     public:
       using RetryableError::RetryableError;
   };
+  // 403/412 通常意味着请求缺少 token / auth / cookie。重试不会改变结果，
+  // 所以继承 DownloadError（不可重试），由调用方提示用户补充凭据。
+  class AuthRequiredError : public DownloadError {
+    public:
+      using DownloadError::DownloadError;
+  };
 
   class Downloader {
     public:

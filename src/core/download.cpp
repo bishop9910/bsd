@@ -2,6 +2,20 @@
 
 namespace BSD_CORE {
 
+  namespace {
+
+    bool is_auth_status(long status) { return status == 403 || status == 412; }
+
+    std::string auth_required_message(long status) {
+      const char* reason = (status == 412) ? "Precondition Failed" : "Forbidden";
+      return "HTTP " + std::to_string(status) + " " + reason +
+             ": token / auth / cookie not provided; retrying will not help. "
+             "Pass one with -H \"Cookie: ...\", "
+             "-H \"Authorization: Bearer ...\" or the corresponding token header";
+    }
+
+  } // namespace
+
   void Downloader::run() {
     Log::info() << "start to download the file${" << file_url << "}";
     if(file_url.empty()){
@@ -14,6 +28,8 @@ namespace BSD_CORE {
       try{
         Log::info() << "try to continue the download...";
         recover();
+      }catch(const AuthRequiredError&){
+        throw;
       }catch(const std::exception& e){
         Log::error() << "recover failed, exception:" << e.what();
         cleanLastFile();
@@ -65,7 +81,14 @@ namespace BSD_CORE {
     Log::info() << "preparing...";
     try{
       head_ = Curl::head(file_url, curl_config);
+    }catch(const std::exception& e){
+      throw RetryableError(e.what());
+    }
 
+    if(is_auth_status(head_.status))
+      throw AuthRequiredError(auth_required_message(head_.status));
+
+    try{
       if(file_name.empty()){
         file_name = resolve_filename(head_);
       }
@@ -139,6 +162,9 @@ namespace BSD_CORE {
   void Downloader::recover() {
     meta_ = readMetaFile();
     head_ = Curl::head(file_url, curl_config);
+
+    if(is_auth_status(head_.status))
+      throw AuthRequiredError(auth_required_message(head_.status));
 
     if(meta_.version != meta_version){
       throw std::runtime_error("meta file version conflict");
@@ -258,6 +284,8 @@ namespace BSD_CORE {
         throw RetryableError("server returned 200 (file changed or Range unsupported)");
       if (r.status == 416)
         throw RetryableError("range not satisfiable, meta stale");
+      if (is_auth_status(r.status))
+        throw AuthRequiredError(auth_required_message(r.status));
       if (r.status != 206)
         throw RetryableChunkError("HTTP " + std::to_string(r.status));
 
